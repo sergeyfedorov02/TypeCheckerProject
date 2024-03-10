@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Folder Include="StellaContent" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Antlr4.Runtime.Standard" Version="4.9.2" />
+    </ItemGroup>
+
+    <!--<Target Name="GenerateAntlrCode" BeforeTargets="BeforeBuild">
+        <Exec Command="java -jar C:\ANTLR\antlr-4.9.2-complete.jar -Dlanguage=CSharp -no-listener -visitor $(MSBuildThisFileDirectory)StellaContent\stellaLexer.g4 $(MSBuildThisFileDirectory)StellaContent\stellaParser.g4" />
+    </Target>-->
+
+</Project>

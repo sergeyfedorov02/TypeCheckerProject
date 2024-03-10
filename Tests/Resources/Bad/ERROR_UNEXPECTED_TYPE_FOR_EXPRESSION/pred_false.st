@@ -1,0 +1,7 @@
+language core;
+
+extend with #predecessor;
+
+fn main(n : Nat) -> Nat {
+  return Nat::pred(false);
+}
