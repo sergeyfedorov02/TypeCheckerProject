@@ -289,7 +289,7 @@ public static class ErrorsOutput
         sb.AppendLine("тип инъекции");
         sb.AppendLine($"{expression.ToStringTree(parser)}");
         sb.AppendLine("невозможно определить");
-        sb.AppendLine("(в данном контексте отсутсвует ожидаемый тип-сумма)");
+        sb.AppendLine("(в данном контексте отсутствует ожидаемый тип-сумма)");
 
         return sb.ToString();
     }
@@ -301,7 +301,7 @@ public static class ErrorsOutput
         sb.AppendLine("тип варианта");
         sb.AppendLine($"{expression.ToStringTree(parser)}");
         sb.AppendLine("невозможно определить");
-        sb.AppendLine("(в данном контексте отсутсвует ожидаемый тип варианта)");
+        sb.AppendLine("(в данном контексте отсутствует ожидаемый тип варианта)");
 
         return sb.ToString();
     }
@@ -313,7 +313,7 @@ public static class ErrorsOutput
         sb.AppendLine("тип списка");
         sb.AppendLine($"{expression.ToStringTree(parser)}");
         sb.AppendLine("невозможно определить");
-        sb.AppendLine("(в данном контексте отсутсвует ожидаемый тип списка)");
+        sb.AppendLine("(в данном контексте отсутствует ожидаемый тип списка)");
 
         return sb.ToString();
     }

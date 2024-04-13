@@ -1,4 +1,4 @@
-﻿// Lexer definition for use with Antlr4
+// Lexer definition for use with Antlr4
 lexer grammar stellaLexer;
 // Predefined regular expressions in BNFC
 fragment LETTER  : CAPITAL | SMALL ;
@@ -83,6 +83,7 @@ TRY : 'try' ;
 CATCH : 'catch' ;
 TOP_TYPE : 'Top' ;
 BOTTOM_TYPE : 'Bot' ;
+AUTO_TYPE : 'auto' ;
 GENERIC : 'generic' ;
 FORALL : 'forall' ;
 COMMENT_antlr_builtin
@@ -96,7 +97,7 @@ MULTICOMMENT_antlr_builtin
 
 StellaIdent : ('_'|LETTER) ([!\-:?_]|(DIGIT|LETTER))*;
 ExtensionName : '#' ([\-_]|(DIGIT|LETTER))+;
-MemoryAddress: '<0x' (DIGIT|[a-f])+ '>';
+MemoryAddress: '<0x' (DIGIT|[A-F]|[a-f])+ '>';
 
 
 

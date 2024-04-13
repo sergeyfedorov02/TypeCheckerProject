@@ -280,6 +280,11 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         throw new NotImplementedException();
     }
 
+    public IType VisitTryCastAs(TryCastAsContext context)
+    {
+        throw new NotImplementedException();
+    }
+
     public IType VisitHead(HeadContext context)
     {
         var listType = VisitContextWithExpectedType(() => context.list.Accept(this), null, _expectedTypes);
@@ -1088,6 +1093,11 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         return new TypeUnit();
     }
 
+    public IType VisitPatternCastAs(PatternCastAsContext context)
+    {
+        throw new NotImplementedException();
+    }
+
     public IType VisitPatternInt(PatternIntContext context)
     {
         return new TypeNat();
@@ -1153,6 +1163,11 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     }
 
     public IType VisitTypeRec(TypeRecContext context)
+    {
+        throw new NotImplementedException();
+    }
+
+    public IType VisitTypeAuto(TypeAutoContext context)
     {
         throw new NotImplementedException();
     }
