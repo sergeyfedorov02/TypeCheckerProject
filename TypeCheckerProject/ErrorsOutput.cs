@@ -240,7 +240,7 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
-    
+
     public static string ErrorUnexpectedVariantLabel(string label, IType currentVariant,
         ExprContext expression, stellaParser parser)
     {
@@ -317,7 +317,7 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
-    
+
     public static string ErrorAmbiguousPatternType(PatternContext pattern, stellaParser parser)
     {
         var sb = new StringBuilder();
@@ -365,7 +365,7 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
-    
+
     public static string ErrorIncorrectArityOfMain(int numberArg)
     {
         var sb = new StringBuilder();
@@ -453,6 +453,88 @@ public static class ErrorsOutput
         sb.AppendLine("содержит тег без данных");
         sb.AppendLine("Хотя в типе разбираемого выражения этого тег указан с данными");
         sb.AppendLine($"{someTyping}");
+
+        return sb.ToString();
+    }
+
+    public static string ErrorDuplicateVariantTypeFields(IEnumerable<string> labelNamesCollection,
+        IType variant, stellaParser parser)
+    {
+        var labelNames = string.Join(", ", labelNamesCollection);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_DUPLICATE_VARIANT_TYPE_FIELDS:");
+        sb.AppendLine("повторяющиеся метки варианта");
+        sb.AppendLine($"{labelNames}");
+        sb.AppendLine("в варианте типа");
+        sb.AppendLine($"{variant}");
+
+        return sb.ToString();
+    }
+
+    public static string ErrorAmbiguousReferenceType(ConstMemoryContext constMemoryContext, stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_AMBIGUOUS_REFERENCE_TYPE:");
+        sb.AppendLine("неоднозначный тип адреса памяти");
+        sb.AppendLine($"{constMemoryContext.ToStringTree(parser)}");
+
+        return sb.ToString();
+    }
+
+    public static string ErrorNotAReference(ExprContext exprContext, stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_NOT_A_REFERENCE:");
+        sb.AppendLine("попытка разыменовать(Deref)");
+        sb.AppendLine("или присвоить значение(Assign)");
+        sb.AppendLine("выражению не ссылочного типа");
+        sb.AppendLine($"{exprContext.ToStringTree(parser)}");
+
+        return sb.ToString();
+    }
+
+    public static string ErrorUnexpectedMemoryAddress(IType curType, ExprContext exprContext, stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_UNEXPECTED_MEMORY_ADDRESS:");
+        sb.AppendLine("адрес памяти");
+        sb.AppendLine($"{exprContext.ToStringTree(parser)}");
+        sb.AppendLine("используется там, где ожидается тип, отличный от типа-ссылки");
+        sb.AppendLine($"{curType}");
+
+        return sb.ToString();
+    }
+    
+    public static string ErrorAmbiguousPanicType(ExprContext exprContext, stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_AMBIGUOUS_PANIC_TYPE:");
+        sb.AppendLine("неоднозначный тип ошибки");
+        sb.AppendLine("для выражения");
+        sb.AppendLine($"{exprContext.ToStringTree(parser)}");
+
+        return sb.ToString();
+    }
+    
+    public static string ErrorExceptionTypeNotDeclared(ExprContext exprContext, stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_EXCEPTION_TYPE_NOT_DECLARED:");
+        sb.AppendLine("в программе используются исключения,");
+        sb.AppendLine("но не объявлен их тип");
+        sb.AppendLine($"{exprContext.ToStringTree(parser)}");
+
+        return sb.ToString();
+    }
+    
+    public static string ErrorAmbiguousThrowType(ExprContext exprContext, stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_AMBIGUOUS_THROW_TYPE:");
+        sb.AppendLine("неоднозначный тип ошибки");
+        sb.AppendLine("для выражения");
+        sb.AppendLine($"{exprContext.ToStringTree(parser)}");
 
         return sb.ToString();
     }

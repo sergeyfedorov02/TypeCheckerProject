@@ -81,6 +81,16 @@ public static class StandardTypes
         }
     }
 
+    public record TypeRef(IType InternalType) : IType
+    {
+        public override string ToString()
+        {
+            return
+                $"&{InternalType}";
+        }
+    }
+
+
     public static bool EqualsIType(IType first, IType second)
     {
         return first.ToString() is not null && first.ToString()!.Equals(second.ToString());

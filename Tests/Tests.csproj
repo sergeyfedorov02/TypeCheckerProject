@@ -486,7 +486,6 @@
       <None Remove="Resources\Ok\try_catch_with_structural_pattern.st" />
       <EmbeddedResource Include="Resources\Ok\try_catch_with_structural_pattern.st" />
       <None Remove="Resources\Bad\ERROR_UNEXPECTED_PATTERN_FOR_TYPE\try_catch_unepected_pattern.st" />
-      <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_PATTERN_FOR_TYPE\try_catch_unepected_pattern.st" />
       <None Remove="Resources\Bad\ERROR_UNEXPECTED_PATTERN_FOR_TYPE\try_catch_variant.st" />
       <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_PATTERN_FOR_TYPE\try_catch_variant.st" />
       <None Remove="Resources\Ok\try_catch_variant.st" />
@@ -513,6 +512,42 @@
       <None Remove="Resources\Bad\ERROR_DUPLICATE_VARIANT_TYPE_FILEDS\variants-unexpected-type-of-expression-1.st" />
       <None Remove="Resources\Bad\ERROR_DUPLICATE_VARIANT_TYPE_FIELDS\variants-unexpected-type-of-expression-1.st" />
       <EmbeddedResource Include="Resources\Bad\ERROR_DUPLICATE_VARIANT_TYPE_FIELDS\variants-unexpected-type-of-expression-1.st" />
+      <None Remove="Resources\Bad\ERROR_UNEXPECTED_MEMORY_ADDRESS\address_return.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_MEMORY_ADDRESS\address_return.st" />
+      <None Remove="Resources\Bad\ERROR_AMBIGUOUS_PANIC_TYPE\simple_panic.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_AMBIGUOUS_PANIC_TYPE\simple_panic.st" />
+      <None Remove="Resources\Bad\ERROR_AMBIGUOUS_REFERENCE_TYPE\deref_memory_from_lambda.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_AMBIGUOUS_REFERENCE_TYPE\deref_memory_from_lambda.st" />
+      <None Remove="Resources\Bad\ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION\deref_memory.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION\deref_memory.st" />
+      <None Remove="Resources\Ok\memory_in_if.st" />
+      <EmbeddedResource Include="Resources\Ok\memory_in_if.st" />
+      <None Remove="Resources\Ok\memory_in_if_2.st" />
+      <EmbeddedResource Include="Resources\Ok\memory_in_if_2.st" />
+      <None Remove="Resources\Ok\memory_pass_to_func.st" />
+      <EmbeddedResource Include="Resources\Ok\memory_pass_to_func.st" />
+      <None Remove="Resources\Ok\memory_write_read.st" />
+      <EmbeddedResource Include="Resources\Ok\memory_write_read.st" />
+      <None Remove="Resources\Ok\memory_write_read_2.st" />
+      <EmbeddedResource Include="Resources\Ok\memory_write_read_2.st" />
+      <None Remove="Resources\Ok\memory_write_read_3.st" />
+      <EmbeddedResource Include="Resources\Ok\memory_write_read_3.st" />
+      <None Remove="Resources\Ok\try_catch_unexpected_pattern_2.st" />
+      <EmbeddedResource Include="Resources\Ok\try_catch_unexpected_pattern_2.st" />
+      <None Remove="Resources\Ok\try_cast_as.st" />
+      <EmbeddedResource Include="Resources\Ok\try_cast_as.st" />
+      <None Remove="Resources\Ok\type_cast_from_task.st" />
+      <EmbeddedResource Include="Resources\Ok\type_cast_from_task.st" />
+      <None Remove="Resources\Bad\ERROR_EXCEPTION_TYPE_NOT_DECLARED\simple.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_EXCEPTION_TYPE_NOT_DECLARED\simple.st" />
+      <None Remove="Resources\Ok\exception_with.st" />
+      <EmbeddedResource Include="Resources\Ok\exception_with.st" />
+      <None Remove="Resources\Ok\simple_exceptions.st" />
+      <EmbeddedResource Include="Resources\Ok\simple_exceptions.st" />
+      <None Remove="Resources\Bad\ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION\simple_block.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION\simple_block.st" />
+      <None Remove="Resources\Bad\ERROR_UNEXPECTED_PATTERN_FOR_TYPE\try_catch_unexpected_pattern.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_PATTERN_FOR_TYPE\try_catch_unexpected_pattern.st" />
     </ItemGroup>
 
     <ItemGroup>

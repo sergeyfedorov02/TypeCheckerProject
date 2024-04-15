@@ -5,6 +5,11 @@ namespace TypeCheckerProject;
 
 public static class VisitContext
 {
+    public static void AddExtension(IEnumerable<string> newExtensions, HashSet<string> extensions)
+    {
+        extensions.UnionWith(newExtensions);
+    }
+    
     public static void AddVariableTypeInfo(string name, IType type, Dictionary<string, Stack<IType>> variableTypeInfo)
     {
         if (!variableTypeInfo.ContainsKey(name))
