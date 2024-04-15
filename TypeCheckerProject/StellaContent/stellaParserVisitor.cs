@@ -223,6 +223,13 @@ public interface IstellaParserVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <return>The visitor result.</return>
 	Result VisitTryCatch([NotNull] stellaParser.TryCatchContext context);
 	/// <summary>
+	/// Visit a parse tree produced by the <c>TryCastAs</c>
+	/// labeled alternative in <see cref="stellaParser.expr"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitTryCastAs([NotNull] stellaParser.TryCastAsContext context);
+	/// <summary>
 	/// Visit a parse tree produced by the <c>Head</c>
 	/// labeled alternative in <see cref="stellaParser.expr"/>.
 	/// </summary>
@@ -647,6 +654,13 @@ public interface IstellaParserVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <return>The visitor result.</return>
 	Result VisitPatternUnit([NotNull] stellaParser.PatternUnitContext context);
 	/// <summary>
+	/// Visit a parse tree produced by the <c>PatternCastAs</c>
+	/// labeled alternative in <see cref="stellaParser.pattern"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitPatternCastAs([NotNull] stellaParser.PatternCastAsContext context);
+	/// <summary>
 	/// Visit a parse tree produced by <see cref="stellaParser.labelledPattern"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
@@ -687,6 +701,13 @@ public interface IstellaParserVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <param name="context">The parse tree.</param>
 	/// <return>The visitor result.</return>
 	Result VisitTypeRec([NotNull] stellaParser.TypeRecContext context);
+	/// <summary>
+	/// Visit a parse tree produced by the <c>TypeAuto</c>
+	/// labeled alternative in <see cref="stellaParser.stellatype"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitTypeAuto([NotNull] stellaParser.TypeAutoContext context);
 	/// <summary>
 	/// Visit a parse tree produced by the <c>TypeSum</c>
 	/// labeled alternative in <see cref="stellaParser.stellatype"/>.
