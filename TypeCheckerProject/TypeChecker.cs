@@ -115,7 +115,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         DeleteVariableTypeInfo(context.name.Text, _variableTypeInfo);
 
-        if (!EqualsIType(returnExprType, returnType, _extensions))
+        if (!EqualsIType(returnExprType, returnType, _extensions, context.returnExpr, Parser))
         {
             ChooseUnexpectedTypeSubtype(_extensions, returnType, returnExprType, context.returnExpr, Parser);
         }
@@ -192,7 +192,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         var variableName = context.name.Text;
         var variableType = TryGetVariableType(variableName, _variableTypeInfo);
 
-        if (variableType == null) throw new Exception(ErrorUndefinedVariable(variableName, context.Parent, Parser));
+        if (variableType is null) throw new Exception(ErrorUndefinedVariable(variableName, context.Parent, Parser));
         return variableType;
     }
 
@@ -440,10 +440,14 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
             var paramType = VisitContextWithExpectedType(() => paramDecls[index].Accept(this), expectedParamType,
                 _expectedTypes);
 
-            if (expectedParamType is not null && !EqualsIType(expectedParamType, paramType, _extensions))
+            if (expectedParamType is not null && !_extensions.Contains("#structural-subtyping"))
             {
-                throw new Exception(ErrorUnexpectedTypeForParameter(paramType, expectedParamType, context.returnExpr,
-                    Parser));
+                if (!EqualsIType(expectedParamType, paramType, _extensions))
+                {
+                    throw new Exception(ErrorUnexpectedTypeForParameter(paramType, expectedParamType,
+                        context.returnExpr,
+                        Parser));
+                }
             }
 
             paramNameTypeDict.Add(paramDeclName, paramType);
@@ -775,7 +779,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         if (expectedType is not null && _extensions.Contains("#structural-subtyping"))
         {
-            if (EqualsIType(currentField, expectedType, _extensions))
+            if (EqualsIType(currentField, expectedType, _extensions, context, Parser))
             {
                 return currentField;
             }
@@ -928,6 +932,15 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     public IType VisitRef(RefContext context)
     {
         var expectedType = _expectedTypes.Peek();
+
+        if (expectedType is not null && !_extensions.Contains("#structural-subtyping"))
+        {
+            if (expectedType is not TypeRef)
+            {
+                throw new Exception(ErrorUnexpectedReference(context, Parser));
+            }
+        }
+
         var internalType = VisitContextWithExpectedType(() => context.expr_.Accept(this),
             (expectedType as TypeRef)?.InternalType, _expectedTypes);
 

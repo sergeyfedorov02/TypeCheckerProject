@@ -635,6 +635,8 @@
       <EmbeddedResource Include="Resources\Ok\subtype_variant2.st" />
       <None Remove="Resources\Ok\subtype_variant3.st" />
       <EmbeddedResource Include="Resources\Ok\subtype_variant3.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\subtyping_record.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\subtyping_record.st" />
     </ItemGroup>
 
     <ItemGroup>

@@ -1,10 +1,13 @@
-﻿using static TypeCheckerProject.StandardTypes;
+﻿using static stellaParser;
+using static TypeCheckerProject.StandardTypes;
+using static TypeCheckerProject.ErrorsOutput;
 
 namespace TypeCheckerProject;
 
 public static class CheckTypes
 {
-    public static bool EqualsIType(IType first, IType second, HashSet<string> extensions)
+    public static bool EqualsIType(IType first, IType second, HashSet<string> extensions, ExprContext? context = null,
+        stellaParser? parser = null)
     {
         if (first.ToString() is not null && first.ToString()!.Equals(second.ToString()))
         {
@@ -27,10 +30,10 @@ public static class CheckTypes
                 secondTypeFunc, extensions),
 
             TypeTuple firstTypeTuple when second is TypeTuple secondTypeTuple => CheckTypeTuple(firstTypeTuple,
-                secondTypeTuple, extensions),
+                secondTypeTuple, extensions, context, parser),
 
             TypeRecord firstTypeRecord when second is TypeRecord secondTypeRecord => CheckTypeRecord(firstTypeRecord,
-                secondTypeRecord, extensions),
+                secondTypeRecord, extensions, context, parser),
 
             TypeSum firstTypeSum when second is TypeSum secondTypeSum => CheckTypeSum(firstTypeSum, secondTypeSum,
                 extensions),
@@ -39,7 +42,7 @@ public static class CheckTypes
                 secondTypeList, extensions),
 
             TypeVariant firstTypeVariant when second is TypeVariant secondTypeVariant => CheckTypeVariant(
-                firstTypeVariant, secondTypeVariant, extensions),
+                firstTypeVariant, secondTypeVariant, extensions, context, parser),
 
             TypeRef firstTypeRef when second is TypeRef secondTypeRef => CheckTypeRef(firstTypeRef, secondTypeRef,
                 extensions),
@@ -67,14 +70,17 @@ public static class CheckTypes
     }
 
     private static bool CheckTypeRecord(TypeRecord firstTypeRecord, TypeRecord secondTypeRecord,
-        HashSet<string> extensions)
+        HashSet<string> extensions, ExprContext? context, stellaParser? parser)
     {
         var firstFields = firstTypeRecord.Fields.ToDictionary();
         var secondFields = secondTypeRecord.Fields.ToDictionary();
 
-        if (secondFields.Keys.Except(firstFields.Keys).Any())
+        var secondExceptFirst = secondFields.Keys.Except(firstFields.Keys).ToList();
+
+        if (secondExceptFirst.Count != 0)
         {
-            return false;
+            throw new Exception(
+                ErrorMissingRecordFields(firstTypeRecord, secondTypeRecord, context!, secondExceptFirst, parser!));
         }
 
         return firstFields.Where(pair => secondFields.ContainsKey(pair.Key))
@@ -82,11 +88,11 @@ public static class CheckTypes
     }
 
     private static bool CheckTypeTuple(TypeTuple firstTypeTuple, TypeTuple secondTypeTuple,
-        HashSet<string> extensions)
+        HashSet<string> extensions, ExprContext? context, stellaParser? parser)
     {
         if (firstTypeTuple.TupleTypes.Count != secondTypeTuple.TupleTypes.Count)
         {
-            return false;
+            throw new Exception(ErrorUnexpectedTupleLength(firstTypeTuple, context!, parser!));
         }
 
         return firstTypeTuple.TupleTypes
@@ -106,15 +112,18 @@ public static class CheckTypes
     }
 
     private static bool CheckTypeVariant(TypeVariant firstTypeVariant, TypeVariant secondTypeVariant,
-        HashSet<string> extensions)
+        HashSet<string> extensions, ExprContext? context, stellaParser? parser)
     {
         var firstVariants = firstTypeVariant.Variants.ToDictionary();
         var secondVariants = secondTypeVariant.Variants.ToDictionary();
 
-        if (firstVariants.Keys.Except(secondVariants.Keys).Any() ||
-            !firstVariants.Keys.All(key => secondVariants.ContainsKey(key)))
+        var firstExceptSecond = firstVariants.Keys.Except(secondVariants.Keys).ToList();
+
+        if (firstExceptSecond.Count != 0)
         {
-            return false;
+            var label = firstExceptSecond.First();
+            throw new Exception(ErrorUnexpectedVariantLabel(label, secondTypeVariant, context!,
+                parser!));
         }
 
         return firstVariants.All(pair =>

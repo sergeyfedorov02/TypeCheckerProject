@@ -601,4 +601,16 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
+    
+    public static string ErrorUnexpectedReference(RuleContext ruleContext, stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_UNEXPECTED_REFERENCE:");
+        sb.AppendLine("получена не ссылка");
+        sb.AppendLine("для выражения");
+        sb.AppendLine($"{ruleContext.ToStringTree(parser)}");
+
+        return sb.ToString();
+    }
+    
 }
