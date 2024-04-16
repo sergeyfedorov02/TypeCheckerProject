@@ -1,4 +1,6 @@
-﻿namespace TypeCheckerProject;
+﻿using static TypeCheckerProject.CheckTypes;
+
+namespace TypeCheckerProject;
 
 public static class StandardTypes
 {
@@ -89,15 +91,25 @@ public static class StandardTypes
                 $"&{InternalType}";
         }
     }
-
-
-    public static bool EqualsIType(IType first, IType second)
+    
+    public record TypeTop : IType
     {
-        return first.ToString() is not null && first.ToString()!.Equals(second.ToString());
+        public override string ToString()
+        {
+            return "Top";
+        }
     }
-
+    
+    public record TypeBottom : IType
+    {
+        public override string ToString()
+        {
+            return "Bottom";
+        }
+    }
+    
     public static IEnumerable<(string, IType)> ExceptRecords(IEnumerable<(string, IType)> values,
-        IEnumerable<(string, IType)> expectedValues)
+        IEnumerable<(string, IType)> expectedValues, HashSet<string> extensions)
     {
         var exceptResult = new Dictionary<string, IType>();
         foreach (var value in values)
@@ -107,7 +119,7 @@ public static class StandardTypes
             {
                 if (value.Item1.Equals(expectedValue.Item1))
                 {
-                    if (EqualsIType(value.Item2, expectedValue.Item2))
+                    if (EqualsIType(value.Item2, expectedValue.Item2, extensions))
                     {
                         containsFlag = true;
                         break;

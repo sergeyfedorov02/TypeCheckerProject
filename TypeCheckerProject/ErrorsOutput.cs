@@ -7,6 +7,16 @@ namespace TypeCheckerProject;
 
 public static class ErrorsOutput
 {
+    public static void ChooseUnexpectedTypeSubtype(HashSet<string> extensions, IType expectedType, IType actualType,
+        ExprContext exprContext, stellaParser parser)
+    {
+        var exceptionMessage = extensions.Contains("#structural-subtyping")
+            ? ErrorUnexpectedSubtype(expectedType, actualType, exprContext, parser)
+            : ErrorUnexpectedTypeForExpression(expectedType, actualType, exprContext, parser);
+
+        throw new Exception(exceptionMessage);
+    }
+
     public static string ErrorMissingMain()
     {
         var sb = new StringBuilder();
@@ -207,10 +217,48 @@ public static class ErrorsOutput
         return sb.ToString();
     }
 
+    public static string ErrorMissingRecordFields(IType expectedType, IType actualType, ExprContext expression,
+        IEnumerable<string> fields, stellaParser parser)
+    {
+        var fieldsString = string.Join(", ", fields);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_MISSING_RECORD_FIELDS:");
+        sb.AppendLine("ожидается тип");
+        sb.AppendLine($"{expectedType}");
+        sb.AppendLine("но получен тип Record");
+        sb.AppendLine($"{actualType}");
+        sb.AppendLine("в котором отсутствуют ожидаемые поля");
+        sb.AppendLine($"{fieldsString}");
+        sb.AppendLine("для выражения");
+        sb.AppendLine($"{expression.ToStringTree(parser)}");
+
+        return sb.ToString();
+    }
+
     public static string ErrorUnexpectedRecordFields(IType expectedType, IType actualType, ExprContext expression,
         IEnumerable<(string, IType)> fields, stellaParser parser)
     {
         var fieldsString = string.Join(", ", fields.Select(field => $"{field.Item1} : {field.Item2}"));
+
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_UNEXPECTED_RECORD_FIELDS:");
+        sb.AppendLine("ожидается тип");
+        sb.AppendLine($"{expectedType}");
+        sb.AppendLine("но получен тип Record");
+        sb.AppendLine($"{actualType}");
+        sb.AppendLine("в котором присутствуют поля, которых нет в ожидаемом типе Record");
+        sb.AppendLine($"{fieldsString}");
+        sb.AppendLine("для выражения");
+        sb.AppendLine($"{expression.ToStringTree(parser)}");
+
+        return sb.ToString();
+    }
+
+    public static string ErrorUnexpectedRecordFields(IType expectedType, IType actualType, ExprContext expression,
+        IEnumerable<string> fields, stellaParser parser)
+    {
+        var fieldsString = string.Join(", ", fields);
 
         var sb = new StringBuilder();
         sb.AppendLine("ERROR_UNEXPECTED_RECORD_FIELDS:");
@@ -505,7 +553,7 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
-    
+
     public static string ErrorAmbiguousPanicType(ExprContext exprContext, stellaParser parser)
     {
         var sb = new StringBuilder();
@@ -516,7 +564,7 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
-    
+
     public static string ErrorExceptionTypeNotDeclared(ExprContext exprContext, stellaParser parser)
     {
         var sb = new StringBuilder();
@@ -527,12 +575,27 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
-    
+
     public static string ErrorAmbiguousThrowType(ExprContext exprContext, stellaParser parser)
     {
         var sb = new StringBuilder();
         sb.AppendLine("ERROR_AMBIGUOUS_THROW_TYPE:");
         sb.AppendLine("неоднозначный тип ошибки");
+        sb.AppendLine("для выражения");
+        sb.AppendLine($"{exprContext.ToStringTree(parser)}");
+
+        return sb.ToString();
+    }
+
+    public static string ErrorUnexpectedSubtype(IType expectedType, IType? actualType, ExprContext exprContext,
+        stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_UNEXPECTED_SUBTYPE:");
+        sb.AppendLine("ожидается подтип типа");
+        sb.AppendLine($"{expectedType}");
+        sb.AppendLine("но получен тип");
+        sb.AppendLine($"{actualType}");
         sb.AppendLine("для выражения");
         sb.AppendLine($"{exprContext.ToStringTree(parser)}");
 
