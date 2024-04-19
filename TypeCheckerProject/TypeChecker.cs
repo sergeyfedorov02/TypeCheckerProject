@@ -724,7 +724,6 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         }
 
         var resultType = expectedType;
-        var casesTypes = new List<IType>();
 
         foreach (var curCase in cases)
         {
@@ -732,17 +731,11 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
                 VisitContextWithExpectedType(() => curCase.pattern_.Accept(this), exprType, _expectedTypes);
             if (!EqualsIType(exprType, patternType, _extensions))
             {
-                throw new Exception(ErrorUnexpectedPatternForType(exprType, curCase.pattern_, Parser));
+                ChooseUnexpectedTypeSubtype(_extensions, patternType, exprType, context, Parser);
             }
 
             resultType =
                 VisitContextWithExpectedType(() => curCase.expr_.Accept(this), expectedType ?? null, _expectedTypes);
-            casesTypes.Add(patternType);
-        }
-
-        foreach (var caseType in casesTypes.Where(caseType => !EqualsIType(caseType, casesTypes[0], _extensions)))
-        {
-            ChooseUnexpectedTypeSubtype(_extensions, casesTypes[0], caseType, context, Parser);
         }
 
         var patterns = cases.Select(it => it.pattern_).ToList();
@@ -792,12 +785,12 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
                 .Item2;
             var currentFieldType =
                 VisitContextWithExpectedType(() => field.rhs.Accept(this), expectedFieldType, _expectedTypes);
-            
-            if (expectedFieldType is not null && !EqualsIType(currentFieldType,expectedFieldType, _extensions))
+
+            if (expectedFieldType is not null && !EqualsIType(currentFieldType, expectedFieldType, _extensions))
             {
-                ChooseUnexpectedTypeSubtype(_extensions,expectedFieldType,currentFieldType, context, Parser);
+                ChooseUnexpectedTypeSubtype(_extensions, expectedFieldType, currentFieldType, context, Parser);
             }
-            
+
             return (fieldName, currentFieldType);
         });
 
@@ -1333,16 +1326,34 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
     public IType VisitPatternFalse(PatternFalseContext context)
     {
+        var expectedType = _expectedTypes.Peek();
+        if (expectedType is not null && expectedType is not TypeBool)
+        {
+            throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
+        }
+
         return new TypeBool();
     }
 
     public IType VisitPatternTrue(PatternTrueContext context)
     {
+        var expectedType = _expectedTypes.Peek();
+        if (expectedType is not null && expectedType is not TypeBool)
+        {
+            throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
+        }
+
         return new TypeBool();
     }
 
     public IType VisitPatternUnit(PatternUnitContext context)
     {
+        var expectedType = _expectedTypes.Peek();
+        if (expectedType is not null && expectedType is not TypeUnit)
+        {
+            throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
+        }
+
         return new TypeUnit();
     }
 
@@ -1361,6 +1372,12 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
     public IType VisitPatternInt(PatternIntContext context)
     {
+        var expectedType = _expectedTypes.Peek();
+        if (expectedType is not null && expectedType is not TypeNat)
+        {
+            throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
+        }
+
         return new TypeNat();
     }
 
