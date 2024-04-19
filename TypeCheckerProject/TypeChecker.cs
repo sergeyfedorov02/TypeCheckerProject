@@ -724,6 +724,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         }
 
         var resultType = expectedType;
+        var casesTypes = new List<IType>();
 
         foreach (var curCase in cases)
         {
@@ -731,11 +732,17 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
                 VisitContextWithExpectedType(() => curCase.pattern_.Accept(this), exprType, _expectedTypes);
             if (!EqualsIType(exprType, patternType, _extensions))
             {
-                ChooseUnexpectedTypeSubtype(_extensions, patternType, exprType, context, Parser);
+                throw new Exception(ErrorUnexpectedPatternForType(exprType, curCase.pattern_, Parser));
             }
 
             resultType =
                 VisitContextWithExpectedType(() => curCase.expr_.Accept(this), expectedType ?? null, _expectedTypes);
+            casesTypes.Add(patternType);
+        }
+
+        foreach (var caseType in casesTypes.Where(caseType => !EqualsIType(caseType, casesTypes[0], _extensions)))
+        {
+            ChooseUnexpectedTypeSubtype(_extensions, casesTypes[0], caseType, context, Parser);
         }
 
         var patterns = cases.Select(it => it.pattern_).ToList();
