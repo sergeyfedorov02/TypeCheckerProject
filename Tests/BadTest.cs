@@ -67,11 +67,24 @@ public class BadTest
                 var actualError = exMessage.Split(":")[0];
                 if (!actualError.Equals(errorName))
                 {
-                    Console.Error.WriteLine($"В файле: {fileName}");
-                    Console.Error.WriteLine($"Ожидалась ошибка: {errorName}");
-                    Console.Error.WriteLine("Но была получена:");
-                    Console.Error.WriteLine(exMessage);
-                    Console.Error.WriteLine();
+                    if (stellaCode.Contains(actualError))
+                    {
+                        if (writeAll)
+                        {
+                            Console.Error.WriteLine($"В файле: {fileFullName} - проверка прошла");
+                            Console.Error.WriteLine($"Главная ошибка: {errorName}");
+                            Console.Error.WriteLine("С альтернативной ошибкой:");
+                            Console.Error.WriteLine(exMessage);
+                        }
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"В файле: {fileName}");
+                        Console.Error.WriteLine($"Ожидалась ошибка: {errorName}");
+                        Console.Error.WriteLine("Но была получена:");
+                        Console.Error.WriteLine(exMessage);
+                        Console.Error.WriteLine();
+                    }
                 }
                 else if (writeAll)
                 {
@@ -87,7 +100,7 @@ public class BadTest
     {
         TestTypeChecker(null, true);
     }
-    
+
     [Test]
     public void TestAllWithoutPrintingPassed()
     {
@@ -99,7 +112,7 @@ public class BadTest
     {
         //write the folder name
         var currentFolderName = "ERROR_UNEXPECTED_PATTERN_FOR_TYPE";
-        
+
         TestTypeChecker(currentFolderName, true);
     }
 
@@ -135,7 +148,7 @@ public class BadTest
         };
         //choose the folder name by index
         var currentFolder = folderNames[2];
-        
+
         TestTypeChecker(currentFolder, true);
     }
 }

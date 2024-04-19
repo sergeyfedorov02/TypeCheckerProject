@@ -13,15 +13,15 @@ public static class CheckTypes
         {
             return true;
         }
+        
+        if (!extensions.Contains("#structural-subtyping"))
+        {
+            return false;
+        }
 
         if (second is TypeTop || first is TypeBottom)
         {
             return true;
-        }
-
-        if (!extensions.Contains("#structural-subtyping"))
-        {
-            return false;
         }
 
         return first switch
