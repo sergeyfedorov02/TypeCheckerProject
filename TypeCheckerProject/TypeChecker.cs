@@ -785,6 +785,12 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
                 .Item2;
             var currentFieldType =
                 VisitContextWithExpectedType(() => field.rhs.Accept(this), expectedFieldType, _expectedTypes);
+            
+            if (expectedFieldType is not null && !EqualsIType(currentFieldType,expectedFieldType, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions,expectedFieldType,currentFieldType, context, Parser);
+            }
+            
             return (fieldName, currentFieldType);
         });
 
