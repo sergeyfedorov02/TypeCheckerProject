@@ -74,9 +74,21 @@ public static class VisitContext
         }
     }
 
+    private static PatternContext GetPattern(PatternContext pattern)
+    {
+        return pattern switch
+        {
+            PatternAscContext context => GetPattern(context.pattern_),
+            ParenthesisedPatternContext context => GetPattern(context.pattern_),
+            _ => pattern
+        };
+    }
+
     public static bool CheckExhaustiveMatchPatterns(IType expectedType, List<PatternContext> patterns)
     {
-        if (patterns.Any(p => p is PatternVarContext))
+        var curPatterns = patterns.Select(GetPattern).ToList();
+        
+        if (curPatterns.Any(p => p is PatternVarContext))
         {
             return true;
         }
@@ -84,10 +96,10 @@ public static class VisitContext
         switch (expectedType)
         {
             case TypeNat:
-                var numbers = patterns.OfType<PatternIntContext>().Select(n => int.Parse(n.n.Text))
+                var numbers = curPatterns.OfType<PatternIntContext>().Select(n => int.Parse(n.n.Text))
                     .ToHashSet();
                 int? length = null;
-                patterns
+                curPatterns
                     .OfType<PatternSuccContext>()
                     .Select(it =>
                     {
@@ -118,14 +130,14 @@ public static class VisitContext
                 return length != null && Enumerable.Range(0, length.Value).All(i => numbers.Contains(i));
 
             case TypeBool:
-                return patterns.Any(p => p is PatternTrueContext) &&
-                       patterns.Any(p => p is PatternFalseContext);
+                return curPatterns.Any(p => p is PatternTrueContext) &&
+                       curPatterns.Any(p => p is PatternFalseContext);
 
             case TypeUnit:
-                return patterns.Any(p => p is PatternUnitContext);
+                return curPatterns.Any(p => p is PatternUnitContext);
 
             case TypeTuple typeTuple:
-                var tupleList = patterns.OfType<PatternTupleContext>()
+                var tupleList = curPatterns.OfType<PatternTupleContext>()
                     .Where(p => p._patterns.Count == typeTuple.TupleTypes.Count).ToList();
 
                 return typeTuple.TupleTypes.Select((type, index) =>
@@ -136,7 +148,7 @@ public static class VisitContext
             case TypeRecord typeRecord:
                 return typeRecord.Fields.All(field =>
                 {
-                    var recordList = patterns.OfType<PatternRecordContext>()
+                    var recordList = curPatterns.OfType<PatternRecordContext>()
                         .Where(p => p._patterns.Count == typeRecord.Fields.Count() &&
                                     p._patterns.Any(pp => pp.label.Text.Equals(field.Item1))).SelectMany(p =>
                             p._patterns.Where(pp => pp.label.Text.Equals(field.Item1)).Select(pp => pp.pattern()))
@@ -145,19 +157,19 @@ public static class VisitContext
                 });
 
             case TypeSum typeSum:
-                var inlList = patterns.OfType<PatternInlContext>().Select(p => p.pattern()).ToList();
-                var inrList = patterns.OfType<PatternInrContext>().Select(p => p.pattern()).ToList();
+                var inlList = curPatterns.OfType<PatternInlContext>().Select(p => p.pattern()).ToList();
+                var inrList = curPatterns.OfType<PatternInrContext>().Select(p => p.pattern()).ToList();
                 return inlList.Count != 0 && inrList.Count != 0 &&
                        CheckExhaustiveMatchPatterns(typeSum.Inl, inlList) &&
                        CheckExhaustiveMatchPatterns(typeSum.Inr, inrList);
 
             case TypeList typeList:
-                var patternsList = patterns
+                var patternsList = curPatterns
                     .OfType<PatternListContext>()
                     .Select(p => p._patterns.ToList())
                     .ToList();
                 var consVariableList = new List<List<PatternContext>>();
-                var patternConsContexts = patterns.OfType<PatternConsContext>().ToList();
+                var patternConsContexts = curPatterns.OfType<PatternConsContext>().ToList();
 
                 foreach (var patternConsContext in patternConsContexts)
                 {
@@ -207,7 +219,7 @@ public static class VisitContext
                 });
 
             case TypeVariant typeVariant:
-                var variantList = patterns.OfType<PatternVariantContext>().ToList();
+                var variantList = curPatterns.OfType<PatternVariantContext>().ToList();
                 return typeVariant.Variants.All(v =>
                 {
                     return variantList.Any(vp => vp.label.Text == v.Item1) && (v.Item2 is null ||

@@ -865,14 +865,36 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     public IType VisitLetRec(LetRecContext context)
     {
         var expectedType = _expectedTypes.Peek();
+        var savedVariableTypeInfo = new Dictionary<string, Stack<IType>>();
+
+        foreach (var (variable, types) in _variableTypeInfo)
+        {
+            foreach (var type in types)
+            {
+                if (!savedVariableTypeInfo.ContainsKey(variable))
+                {
+                    savedVariableTypeInfo[variable] = new Stack<IType>();
+                }
+
+                savedVariableTypeInfo[variable].Push(type);
+            }
+        }
 
         foreach (var patternBinding in context._patternBindings)
         {
             var patternType = VisitContextWithExpectedType(() => patternBinding.pat.Accept(this), null, _expectedTypes);
             VisitContextWithExpectedType(() => patternBinding.expr().Accept(this), patternType, _expectedTypes);
+
+            if (!CheckExhaustiveMatchPatterns(patternType, context._patternBindings.Select(x => x.pat).ToList()))
+            {
+                throw new Exception(ErrorNonexhaustiveLetPatterns(patternType, context, Parser));
+            }
         }
 
         var exprType = VisitContextWithExpectedType(() => context.expr().Accept(this), expectedType, _expectedTypes);
+
+        _variableTypeInfo = savedVariableTypeInfo;
+
         return exprType;
     }
 
@@ -1031,7 +1053,12 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         foreach (var patternBinding in context._patternBindings)
         {
             var exprType = VisitContextWithExpectedType(() => patternBinding.expr().Accept(this), null, _expectedTypes);
-            VisitContextWithExpectedType(() => patternBinding.pat.Accept(this), exprType, _expectedTypes);
+            var patType = VisitContextWithExpectedType(() => patternBinding.pat.Accept(this), exprType, _expectedTypes);
+
+            if (!CheckExhaustiveMatchPatterns(patType, context._patternBindings.Select(x => x.pat).ToList()))
+            {
+                throw new Exception(ErrorNonexhaustiveLetPatterns(patType, context, Parser));
+            }
         }
 
         var contextExprType =

@@ -613,4 +613,16 @@ public static class ErrorsOutput
         return sb.ToString();
     }
     
+    public static string ErrorNonexhaustiveLetPatterns(IType expectedType, RuleContext expression,
+        stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_NONEXHAUSTIVE_LET_PATTERNS:");
+        sb.AppendLine("не все образцы для типа");
+        sb.AppendLine($"{expectedType}");
+        sb.AppendLine("перечислены в выражении");
+        sb.AppendLine($"{expression.ToStringTree(parser)}");
+
+        return sb.ToString();
+    }
 }
