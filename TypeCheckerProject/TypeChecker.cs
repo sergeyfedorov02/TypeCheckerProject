@@ -102,23 +102,37 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         AddVariableTypeInfo(paramNameTypeDict, _variableTypeInfo);
 
-        var nestedFunctionsDict = context._localDecls.OfType<DeclFunContext>()
-            .ToDictionary(f => f.name.Text, f => f.Accept(this));
+        var savedVariableTypeInfo = new Dictionary<string, Stack<IType>>();
+        foreach (var (variable, types) in _variableTypeInfo)
+        {
+            var copyTypesStack = new Stack<IType>(types.Reverse());
+            savedVariableTypeInfo[variable] = copyTypesStack;
+        }
+
+        var nestedFunctionsDict = context._localDecls.OfType<DeclFunContext>().Select(it =>
+        {
+            var type = it.Accept(this);
+            AddVariableTypeInfo(it.name.Text, type, _variableTypeInfo);
+            return new KeyValuePair<string, IType>(it.name.Text, type);
+        }).ToDictionary();
 
         AddVariableTypeInfo(nestedFunctionsDict, _variableTypeInfo);
 
         var returnExprType = VisitContextWithExpectedType(() => context.returnExpr.Accept(this),
             returnType, _expectedTypes);
 
-        DeleteVariableTypeInfo(nestedFunctionsDict.Union(paramNameTypeDict).ToDictionary(),
-            _variableTypeInfo);
-
-        DeleteVariableTypeInfo(context.name.Text, _variableTypeInfo);
-
         if (!EqualsIType(returnExprType, returnType, _extensions, context.returnExpr, Parser))
         {
             ChooseUnexpectedTypeSubtype(_extensions, returnType, returnExprType, context.returnExpr, Parser);
         }
+
+        DeleteVariableTypeInfo(nestedFunctionsDict, _variableTypeInfo);
+
+        _variableTypeInfo = savedVariableTypeInfo;
+
+        DeleteVariableTypeInfo(paramNameTypeDict, _variableTypeInfo);
+
+        DeleteVariableTypeInfo(context.name.Text, _variableTypeInfo);
 
         return functionType;
     }
@@ -729,9 +743,9 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         {
             var patternType =
                 VisitContextWithExpectedType(() => curCase.pattern_.Accept(this), exprType, _expectedTypes);
-            if (!EqualsIType(exprType, patternType, _extensions))
+            if (!EqualsIType(patternType, exprType, _extensions))
             {
-                ChooseUnexpectedTypeSubtype(_extensions, patternType, exprType, context, Parser);
+                ChooseUnexpectedTypeSubtype(_extensions, exprType, patternType, context, Parser);
             }
 
             resultType =
@@ -866,18 +880,10 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var expectedType = _expectedTypes.Peek();
         var savedVariableTypeInfo = new Dictionary<string, Stack<IType>>();
-
         foreach (var (variable, types) in _variableTypeInfo)
         {
-            foreach (var type in types)
-            {
-                if (!savedVariableTypeInfo.ContainsKey(variable))
-                {
-                    savedVariableTypeInfo[variable] = new Stack<IType>();
-                }
-
-                savedVariableTypeInfo[variable].Push(type);
-            }
+            var copyTypesStack = new Stack<IType>(types.Reverse());
+            savedVariableTypeInfo[variable] = copyTypesStack;
         }
 
         foreach (var patternBinding in context._patternBindings)
@@ -986,7 +992,15 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         var internalType = VisitContextWithExpectedType(() => context.expr_.Accept(this),
             (expectedType as TypeRef)?.InternalType, _expectedTypes);
 
-        return new TypeRef(internalType);
+        if (expectedType is TypeRef typeRef)
+        {
+            if (!EqualsIType(internalType, typeRef.InternalType, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, typeRef.InternalType, internalType, context, Parser);
+            }
+        }
+        
+        return expectedType ?? new TypeRef(internalType);
     }
 
     public IType VisitDotTuple(DotTupleContext context)
@@ -1036,18 +1050,10 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var expectedType = _expectedTypes.Peek();
         var savedVariableTypeInfo = new Dictionary<string, Stack<IType>>();
-
         foreach (var (variable, types) in _variableTypeInfo)
         {
-            foreach (var type in types)
-            {
-                if (!savedVariableTypeInfo.ContainsKey(variable))
-                {
-                    savedVariableTypeInfo[variable] = new Stack<IType>();
-                }
-
-                savedVariableTypeInfo[variable].Push(type);
-            }
+            var copyTypesStack = new Stack<IType>(types.Reverse());
+            savedVariableTypeInfo[variable] = copyTypesStack;
         }
 
         foreach (var patternBinding in context._patternBindings)

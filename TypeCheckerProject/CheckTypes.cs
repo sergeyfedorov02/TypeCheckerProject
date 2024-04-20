@@ -135,6 +135,7 @@ public static class CheckTypes
 
     private static bool CheckTypeRef(TypeRef firstTypeRef, TypeRef secondTypeRef, HashSet<string> extensions)
     {
-        return EqualsIType(firstTypeRef.InternalType, secondTypeRef.InternalType, extensions);
+        return EqualsIType(firstTypeRef.InternalType, secondTypeRef.InternalType, extensions) &&
+               EqualsIType(secondTypeRef.InternalType, firstTypeRef.InternalType, extensions);
     }
 }

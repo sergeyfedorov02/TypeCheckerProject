@@ -742,6 +742,16 @@
       <EmbeddedResource Include="Resources\Ok\dot_tuple_dot_tuple-2.st" />
       <None Remove="Resources\Ok\let_two_bindings-2.st" />
       <EmbeddedResource Include="Resources\Ok\let_two_bindings-2.st" />
+      <None Remove="Resources\Bad\ERROR_UNEXPECTED_SUBTYPE\reference_from_func.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_SUBTYPE\reference_from_func.st" />
+      <None Remove="Resources\Ok\pattern_cast_as1.st" />
+      <EmbeddedResource Include="Resources\Ok\pattern_cast_as1.st" />
+      <None Remove="Resources\Ok\pattern_cast_as2.st" />
+      <EmbeddedResource Include="Resources\Ok\pattern_cast_as2.st" />
+      <None Remove="Resources\Ok\pattern_cast_as3.st" />
+      <EmbeddedResource Include="Resources\Ok\pattern_cast_as3.st" />
+      <None Remove="Resources\Ok\pattern_cast_as4.st" />
+      <EmbeddedResource Include="Resources\Ok\pattern_cast_as4.st" />
     </ItemGroup>
 
     <ItemGroup>
