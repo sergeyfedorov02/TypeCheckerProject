@@ -257,6 +257,12 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
     public IType VisitThrow(ThrowContext context)
     {
+        var expectedType = _expectedTypes.Peek();
+        if (expectedType is null && !_extensions.Contains("#ambiguous-type-as-bottom"))
+        {
+            throw new Exception(ErrorAmbiguousThrowType(context, Parser));
+        }
+        
         CheckNotAExpectedType(_exceptionType, () => ErrorExceptionTypeNotDeclared(context, Parser));
 
         var exprType = VisitContextWithExpectedType(() => context.expr_.Accept(this), _exceptionType, _expectedTypes);
@@ -265,16 +271,8 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         {
             ChooseUnexpectedTypeSubtype(_extensions, _exceptionType!, exprType, context, Parser);
         }
-
-        var expectedType = _expectedTypes.Peek();
-        if (expectedType is not null) return expectedType;
-
-        if (_extensions.Contains("#ambiguous-type-as-bottom"))
-        {
-            return new TypeBottom();
-        }
-
-        throw new Exception(ErrorAmbiguousThrowType(context, Parser));
+        
+        return expectedType ?? new TypeBottom();
     }
 
     public IType VisitMultiply(MultiplyContext context)
@@ -286,9 +284,14 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var expectedType = _expectedTypes.Peek();
         CheckNotAExpectedType(expectedType, () => ErrorAmbiguousReferenceType(context, Parser));
-
-        var typeRef = expectedType as TypeRef;
-        CheckNotAExpectedType(typeRef, () => ErrorUnexpectedMemoryAddress(expectedType!, context, Parser));
+        
+        if (expectedType is not null)
+        {
+            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeRef)
+            {
+                throw new Exception(ErrorUnexpectedMemoryAddress(expectedType, context, Parser));
+            }
+        }
 
         return expectedType!;
     }
@@ -889,7 +892,12 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         foreach (var patternBinding in context._patternBindings)
         {
             var patternType = VisitContextWithExpectedType(() => patternBinding.pat.Accept(this), null, _expectedTypes);
-            VisitContextWithExpectedType(() => patternBinding.expr().Accept(this), patternType, _expectedTypes);
+            var curExprType = VisitContextWithExpectedType(() => patternBinding.expr().Accept(this), patternType, _expectedTypes);
+
+            if (!EqualsIType(curExprType, patternType, _extensions))
+            {
+                throw new Exception(ErrorUnexpectedPatternForType(curExprType, patternBinding.pat, Parser));
+            }
 
             if (!CheckExhaustiveMatchPatterns(patternType, context._patternBindings.Select(x => x.pat).ToList()))
             {

@@ -625,4 +625,30 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
+    
+    public static string ErrorMissingTypeForLabel(IType expectedType, RuleContext expression,
+        stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_MISSING_TYPE_FOR_LABEL:");
+        sb.AppendLine("missing type for a variant label failure");
+        sb.AppendLine("with expected type");
+        sb.AppendLine($"{expectedType}");
+
+        return sb.ToString();
+    }
+    
+    public static string ErrorUnexpectedTypeForNullaryLabel(IType expectedType, RuleContext expression,
+        stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_UNEXPECTED_TYPE_FOR_NULLARY_LABEL:");
+        sb.AppendLine("для выражения");
+        sb.AppendLine($"{expression.ToStringTree(parser)}");
+        sb.AppendLine("ожидается тип");
+        sb.AppendLine($"{expectedType}");
+        sb.AppendLine("но его нет");
+
+        return sb.ToString();
+    }
 }

@@ -27,7 +27,7 @@ public static class CheckTypes
         return first switch
         {
             TypeFunction firstTypeFunc when second is TypeFunction secondTypeFunc => CheckTypeFunction(firstTypeFunc,
-                secondTypeFunc, extensions),
+                secondTypeFunc, extensions, context, parser),
 
             TypeTuple firstTypeTuple when second is TypeTuple secondTypeTuple => CheckTypeTuple(firstTypeTuple,
                 secondTypeTuple, extensions, context, parser),
@@ -52,7 +52,7 @@ public static class CheckTypes
     }
 
     private static bool CheckTypeFunction(TypeFunction firstTypeFunc, TypeFunction secondTypeFunc,
-        HashSet<string> extensions)
+        HashSet<string> extensions, ExprContext? context, stellaParser? parser)
     {
         if (!EqualsIType(firstTypeFunc.ReturnType, secondTypeFunc.ReturnType, extensions))
         {
@@ -61,7 +61,8 @@ public static class CheckTypes
 
         if (firstTypeFunc.ArgumentTypes.Count != secondTypeFunc.ArgumentTypes.Count)
         {
-            return false;
+            throw new Exception(ErrorIncorrectNumberOfArguments(firstTypeFunc.ArgumentTypes.Count,
+                secondTypeFunc.ArgumentTypes.Count, context!, parser!));
         }
 
         return firstTypeFunc.ArgumentTypes
@@ -125,7 +126,23 @@ public static class CheckTypes
             throw new Exception(ErrorUnexpectedVariantLabel(label, secondTypeVariant, context!,
                 parser!));
         }
-
+        
+        foreach (var key in secondVariants.Keys.Intersect(firstVariants.Keys))
+        {
+            if (secondVariants[key] is not null && firstVariants[key] is null)
+            {
+                throw new Exception(ErrorMissingTypeForLabel(secondVariants[key]!, context!, parser!));
+            }
+        }
+        
+        foreach (var key in secondVariants.Keys.Intersect(firstVariants.Keys))
+        {
+            if (secondVariants[key] is null && firstVariants[key] is not null)
+            {
+                throw new Exception(ErrorUnexpectedTypeForNullaryLabel(firstVariants[key]!, context!, parser!));
+            }
+        }
+        
         return firstVariants.All(pair =>
         {
             var result = pair.Value is null || EqualsIType(pair.Value, secondVariants[pair.Key]!, extensions);
