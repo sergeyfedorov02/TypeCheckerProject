@@ -267,7 +267,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         var exprType = VisitContextWithExpectedType(() => context.expr_.Accept(this), _exceptionType, _expectedTypes);
 
-        if (!EqualsIType(exprType, _exceptionType!, _extensions))
+        if (!EqualsIType(exprType, _exceptionType!, _extensions, context, Parser))
         {
             ChooseUnexpectedTypeSubtype(_extensions, _exceptionType!, exprType, context, Parser);
         }
@@ -461,7 +461,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
             var paramType = VisitContextWithExpectedType(() => paramDecls[index].Accept(this), expectedParamType,
                 _expectedTypes);
 
-            if (expectedParamType is not null && !EqualsIType(expectedParamType, paramType, _extensions))
+            if (expectedParamType is not null && !EqualsIType(expectedParamType, paramType, _extensions, context, Parser))
             {
                 if (!_extensions.Contains("#structural-subtyping"))
                 {
@@ -615,7 +615,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
             var contextArgsIndex = index;
             var actualType = VisitContextWithExpectedType(() => context._args[contextArgsIndex].Accept(this),
                 currentArgType, _expectedTypes);
-            if (!EqualsIType(actualType, currentArgType, _extensions))
+            if (!EqualsIType(actualType, currentArgType, _extensions, context, Parser))
             {
                 ChooseUnexpectedTypeSubtype(_extensions, currentArgType, actualType, context, Parser);
             }
@@ -746,7 +746,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         {
             var patternType =
                 VisitContextWithExpectedType(() => curCase.pattern_.Accept(this), exprType, _expectedTypes);
-            if (!EqualsIType(patternType, exprType, _extensions))
+            if (!EqualsIType(patternType, exprType, _extensions, context, Parser))
             {
                 ChooseUnexpectedTypeSubtype(_extensions, exprType, patternType, context, Parser);
             }

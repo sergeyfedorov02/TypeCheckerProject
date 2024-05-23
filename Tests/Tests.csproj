@@ -794,6 +794,45 @@
       <EmbeddedResource Include="Resources\Ok\variant_infer_subtyping.st" />
       <None Remove="Resources\Bad\ERROR_AMBIGUOUS_THROW_TYPE\simple_throw.st" />
       <EmbeddedResource Include="Resources\Bad\ERROR_AMBIGUOUS_THROW_TYPE\simple_throw.st" />
+      <None Remove="Resources\Bad\ERROR_UNEXPECTED_VARIANT_LABEL\exceptions-4.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_VARIANT_LABEL\exceptions-4.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\functions-1.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\functions-1.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\functions-2.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\functions-2.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\functions-4.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\functions-4.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\bad-subtyping-2.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\bad-subtyping-2.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\bad-subtyping-3.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\bad-subtyping-3.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\bad-subtyping-5.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\bad-subtyping-5.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\bad-subtyping-6.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\bad-subtyping-6.st" />
+      <None Remove="Resources\Ok\lists-4.st" />
+      <EmbeddedResource Include="Resources\Ok\lists-4.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\references-1.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\references-1.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\references-2.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\references-2.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\sum-types-2.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\sum-types-2.st" />
+      <None Remove="Resources\Ok\try-cast-as-5.st" />
+      <EmbeddedResource Include="Resources\Ok\try-cast-as-5.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\type-cast-patterns-4.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\type-cast-patterns-4.st" />
+      <None Remove="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\variants-3.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_MISSING_RECORD_FIELDS\variants-3.st" />
+      <None Remove="Resources\Bad\ERROR_UNEXPECTED_VARIANT_LABEL\variants-2.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_VARIANT_LABEL\variants-2.st" />
+      <None Remove="Resources\Ok\lists-2.st" />
+      <EmbeddedResource Include="Resources\Ok\lists-2.st" />
+      <None Remove="Resources\Bad\ERROR_UNEXPECTED_RECORD_FIELDS\variants-3.st" />
+      <None Remove="Resources\Bad\ERROR_UNEXPECTED_SUBTYPE\references-5.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_SUBTYPE\references-5.st" />
+      <None Remove="Resources\Bad\ERROR_UNEXPECTED_SUBTYPE\secret-list-2.st" />
+      <EmbeddedResource Include="Resources\Bad\ERROR_UNEXPECTED_SUBTYPE\secret-list-2.st" />
     </ItemGroup>
 
     <ItemGroup>

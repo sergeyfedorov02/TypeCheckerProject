@@ -13,7 +13,7 @@ public static class CheckTypes
         {
             return true;
         }
-        
+
         if (!extensions.Contains("#structural-subtyping"))
         {
             return false;
@@ -36,16 +36,16 @@ public static class CheckTypes
                 secondTypeRecord, extensions, context, parser),
 
             TypeSum firstTypeSum when second is TypeSum secondTypeSum => CheckTypeSum(firstTypeSum, secondTypeSum,
-                extensions),
+                extensions, context, parser),
 
             TypeList firstTypeList when second is TypeList secondTypeList => CheckTypeList(firstTypeList,
-                secondTypeList, extensions),
+                secondTypeList, extensions, context, parser),
 
             TypeVariant firstTypeVariant when second is TypeVariant secondTypeVariant => CheckTypeVariant(
                 firstTypeVariant, secondTypeVariant, extensions, context, parser),
 
             TypeRef firstTypeRef when second is TypeRef secondTypeRef => CheckTypeRef(firstTypeRef, secondTypeRef,
-                extensions),
+                extensions, context, parser),
 
             _ => false
         };
@@ -54,7 +54,7 @@ public static class CheckTypes
     private static bool CheckTypeFunction(TypeFunction firstTypeFunc, TypeFunction secondTypeFunc,
         HashSet<string> extensions, ExprContext? context, stellaParser? parser)
     {
-        if (!EqualsIType(firstTypeFunc.ReturnType, secondTypeFunc.ReturnType, extensions))
+        if (!EqualsIType(firstTypeFunc.ReturnType, secondTypeFunc.ReturnType, extensions, context, parser))
         {
             return false;
         }
@@ -66,7 +66,8 @@ public static class CheckTypes
         }
 
         return firstTypeFunc.ArgumentTypes
-            .Select((value, index) => EqualsIType(secondTypeFunc.ArgumentTypes[index], value, extensions))
+            .Select((value, index) =>
+                EqualsIType(secondTypeFunc.ArgumentTypes[index], value, extensions, context, parser))
             .All(result => result);
     }
 
@@ -85,7 +86,7 @@ public static class CheckTypes
         }
 
         return firstFields.Where(pair => secondFields.ContainsKey(pair.Key))
-            .All(pair => EqualsIType(pair.Value, secondFields[pair.Key], extensions));
+            .All(pair => EqualsIType(pair.Value, secondFields[pair.Key], extensions, context, parser));
     }
 
     private static bool CheckTypeTuple(TypeTuple firstTypeTuple, TypeTuple secondTypeTuple,
@@ -97,19 +98,21 @@ public static class CheckTypes
         }
 
         return firstTypeTuple.TupleTypes
-            .Select((type, index) => EqualsIType(type, secondTypeTuple.TupleTypes[index], extensions))
+            .Select((type, index) => EqualsIType(type, secondTypeTuple.TupleTypes[index], extensions, context, parser))
             .All(result => result);
     }
 
-    private static bool CheckTypeSum(TypeSum firstTypeSum, TypeSum secondTypeSum, HashSet<string> extensions)
+    private static bool CheckTypeSum(TypeSum firstTypeSum, TypeSum secondTypeSum, HashSet<string> extensions,
+        ExprContext? context, stellaParser? parser)
     {
-        return EqualsIType(firstTypeSum.Inl, secondTypeSum.Inl, extensions) &&
-               EqualsIType(firstTypeSum.Inr, secondTypeSum.Inr, extensions);
+        return EqualsIType(firstTypeSum.Inl, secondTypeSum.Inl, extensions, context, parser) &&
+               EqualsIType(firstTypeSum.Inr, secondTypeSum.Inr, extensions, context, parser);
     }
 
-    private static bool CheckTypeList(TypeList firstTypeList, TypeList secondTypeList, HashSet<string> extensions)
+    private static bool CheckTypeList(TypeList firstTypeList, TypeList secondTypeList, HashSet<string> extensions,
+        ExprContext? context, stellaParser? parser)
     {
-        return EqualsIType(firstTypeList.ListType, secondTypeList.ListType, extensions);
+        return EqualsIType(firstTypeList.ListType, secondTypeList.ListType, extensions, context, parser);
     }
 
     private static bool CheckTypeVariant(TypeVariant firstTypeVariant, TypeVariant secondTypeVariant,
@@ -126,7 +129,7 @@ public static class CheckTypes
             throw new Exception(ErrorUnexpectedVariantLabel(label, secondTypeVariant, context!,
                 parser!));
         }
-        
+
         foreach (var key in secondVariants.Keys.Intersect(firstVariants.Keys))
         {
             if (secondVariants[key] is not null && firstVariants[key] is null)
@@ -134,7 +137,7 @@ public static class CheckTypes
                 throw new Exception(ErrorMissingTypeForLabel(secondVariants[key]!, context!, parser!));
             }
         }
-        
+
         foreach (var key in secondVariants.Keys.Intersect(firstVariants.Keys))
         {
             if (secondVariants[key] is null && firstVariants[key] is not null)
@@ -142,17 +145,19 @@ public static class CheckTypes
                 throw new Exception(ErrorUnexpectedTypeForNullaryLabel(firstVariants[key]!, context!, parser!));
             }
         }
-        
+
         return firstVariants.All(pair =>
         {
-            var result = pair.Value is null || EqualsIType(pair.Value, secondVariants[pair.Key]!, extensions);
+            var result = pair.Value is null ||
+                         EqualsIType(pair.Value, secondVariants[pair.Key]!, extensions, context, parser);
             return result;
         });
     }
 
-    private static bool CheckTypeRef(TypeRef firstTypeRef, TypeRef secondTypeRef, HashSet<string> extensions)
+    private static bool CheckTypeRef(TypeRef firstTypeRef, TypeRef secondTypeRef, HashSet<string> extensions,
+        ExprContext? context, stellaParser? parser)
     {
-        return EqualsIType(firstTypeRef.InternalType, secondTypeRef.InternalType, extensions) &&
-               EqualsIType(secondTypeRef.InternalType, firstTypeRef.InternalType, extensions);
+        return EqualsIType(firstTypeRef.InternalType, secondTypeRef.InternalType, extensions, context, parser) &&
+               EqualsIType(secondTypeRef.InternalType, firstTypeRef.InternalType, extensions, context, parser);
     }
 }
