@@ -13,6 +13,9 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     private readonly Stack<IType?> _expectedTypes = new();
     private IType? _exceptionType;
     private readonly HashSet<string> _extensions = new();
+    private readonly Stack<Constraint> _constraints = new();
+    private int _typeVariablesNum = 0;
+    private Stack<List<UniversalTypeVar>> _generics = new();
 
     public IType Visit(IParseTree tree)
     {
@@ -60,16 +63,41 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         {
             var type = decl.Accept(this);
 
-            if (decl is not DeclFunContext declFunContext) continue;
+            if (decl is not DeclFunContext && decl is not DeclFunGenericContext) continue;
 
-            AddVariableTypeInfo(declFunContext.name.Text, type, _variableTypeInfo);
+            string? declName;
+            if (decl is DeclFunContext declFunContext)
+            {
+                declName = declFunContext.name.Text;
+            }
+            else
+            {
+                declName = (decl as DeclFunGenericContext)!.name.Text;
+            }
 
-            if (declFunContext.name.Text != "main") continue;
+            AddVariableTypeInfo(declName, type, _variableTypeInfo);
+
+            if (declName != "main") continue;
 
             var numberArg = (type as TypeFunction)!.ArgumentTypes.Count;
             if (numberArg != 1)
             {
                 throw new Exception(ErrorIncorrectArityOfMain(numberArg));
+            }
+
+            try
+            {
+                var constraintsList = _constraints.ToList();
+                constraintsList.Reverse();
+                VisitConstraint(constraintsList, _extensions);
+            }
+            catch (UnexpectedTypeException e)
+            {
+                throw new Exception(ErrorUnexpectedTypeForExpression(e.Expected, e.Actual, e.Expr, Parser));
+            }
+            catch (OccursInfiniteTypeException e)
+            {
+                throw new Exception(ErrorOccursCheckInfiniteType(e.Expected, e.Actual, e.Expr, Parser));
             }
 
             return type;
@@ -121,9 +149,17 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         var returnExprType = VisitContextWithExpectedType(() => context.returnExpr.Accept(this),
             returnType, _expectedTypes);
 
-        if (!EqualsIType(returnExprType, returnType, _extensions, context.returnExpr, Parser))
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            ChooseUnexpectedTypeSubtype(_extensions, returnType, returnExprType, context.returnExpr, Parser);
+            _constraints.Push(
+                new Constraint(returnExprType, returnType, context.returnExpr));
+        }
+        else
+        {
+            if (!EqualsIType(returnExprType, returnType, _extensions, context.returnExpr, Parser))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, returnType, returnExprType, context.returnExpr, Parser);
+            }
         }
 
         DeleteVariableTypeInfo(nestedFunctionsDict, _variableTypeInfo);
@@ -139,7 +175,64 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
     public IType VisitDeclFunGeneric(DeclFunGenericContext context)
     {
-        throw new NotImplementedException();
+        var typeParams = context._generics.Select(generic => new UniversalTypeVar(generic.Text)).ToList();
+        var paramDecls = context._paramDecls;
+
+        var paramNameTypeDict = paramDecls.Select(param =>
+        {
+            var paramName = param.name.Text;
+            var paramType = VisitContextWithGenerics(() => param.paramType.Accept(this), typeParams, _generics);
+            var g = (paramType as TypeRecord)?.Fields;
+            return (paramName, paramType);
+        }).ToDictionary(item => item.paramName, item => item.paramType);
+
+        var returnType = VisitContextWithGenerics(() => context.returnType.Accept(this), typeParams, _generics);
+
+        var functionType = new TypeFunction(paramNameTypeDict.Select(pi => pi.Value).ToList(), returnType) as IType;
+        if (typeParams.Count != 0)
+        {
+            functionType = new UniversalType(typeParams, functionType);
+        }
+
+        AddVariableTypeInfo(context.name.Text, functionType, _variableTypeInfo);
+
+        AddVariableTypeInfo(paramNameTypeDict, _variableTypeInfo);
+
+        var savedVariableTypeInfo = new Dictionary<string, Stack<IType>>();
+        foreach (var (variable, types) in _variableTypeInfo)
+        {
+            var copyTypesStack = new Stack<IType>(types.Reverse());
+            savedVariableTypeInfo[variable] = copyTypesStack;
+        }
+
+        var nestedFunctionsDict = context._localDecls.OfType<DeclFunContext>().Select(it =>
+        {
+            var type = it.Accept(this);
+            AddVariableTypeInfo(it.name.Text, type, _variableTypeInfo);
+            return new KeyValuePair<string, IType>(it.name.Text, type);
+        }).ToDictionary();
+
+        AddVariableTypeInfo(nestedFunctionsDict, _variableTypeInfo);
+
+        var returnExprType = VisitContextWithExpectedType(
+            () => VisitContextWithGenerics(() => context.returnExpr.Accept(this), typeParams, _generics),
+            returnType, _expectedTypes);
+
+
+        if (!EqualsIType(returnExprType, returnType, _extensions, context.returnExpr, Parser))
+        {
+            ChooseUnexpectedTypeSubtype(_extensions, returnType, returnExprType, context.returnExpr, Parser);
+        }
+
+        DeleteVariableTypeInfo(nestedFunctionsDict, _variableTypeInfo);
+
+        _variableTypeInfo = savedVariableTypeInfo;
+
+        DeleteVariableTypeInfo(paramNameTypeDict, _variableTypeInfo);
+
+        DeleteVariableTypeInfo(context.name.Text, _variableTypeInfo);
+
+        return functionType;
     }
 
     public IType VisitDeclTypeAlias(DeclTypeAliasContext context)
@@ -193,9 +286,18 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var typeNat = new TypeNat();
         var argumentType = VisitContextWithExpectedType(() => context.n.Accept(this), typeNat, _expectedTypes);
-        if (!EqualsIType(argumentType, typeNat, _extensions))
+
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            ChooseUnexpectedTypeSubtype(_extensions, typeNat, argumentType, context, Parser);
+            _constraints.Push(
+                new Constraint(argumentType, typeNat, context));
+        }
+        else
+        {
+            if (!EqualsIType(argumentType, typeNat, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, typeNat, argumentType, context, Parser);
+            }
         }
 
         return new TypeBool();
@@ -212,7 +314,27 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
     public IType VisitTypeAbstraction(TypeAbstractionContext context)
     {
-        throw new NotImplementedException();
+        var generics = context._generics.Select(generic => new UniversalTypeVar(generic.Text)).ToList();
+
+        var expectedType = _expectedTypes.Peek();
+        if (expectedType is UniversalType universalType && universalType.Variables.Count == generics.Count)
+        {
+            expectedType = ReplaceType(universalType.NestedType, universalType.Variables.Select((typeVar, index) =>
+            {
+                var genericByIndex = generics[index];
+                return (genericByIndex, typeVar as IType);
+            }).ToDictionary());
+        }
+        else
+        {
+            expectedType = expectedType as UniversalType;
+        }
+
+        var nestedType = VisitContextWithExpectedType(
+            () => VisitContextWithGenerics(() => context.expr_.Accept(this), generics, _generics), expectedType,
+            _expectedTypes);
+
+        return new UniversalType(generics, nestedType);
     }
 
     public IType VisitDivide(DivideContext context)
@@ -262,7 +384,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         {
             throw new Exception(ErrorAmbiguousThrowType(context, Parser));
         }
-        
+
         CheckNotAExpectedType(_exceptionType, () => ErrorExceptionTypeNotDeclared(context, Parser));
 
         var exprType = VisitContextWithExpectedType(() => context.expr_.Accept(this), _exceptionType, _expectedTypes);
@@ -271,7 +393,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         {
             ChooseUnexpectedTypeSubtype(_extensions, _exceptionType!, exprType, context, Parser);
         }
-        
+
         return expectedType ?? new TypeBottom();
     }
 
@@ -284,7 +406,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var expectedType = _expectedTypes.Peek();
         CheckNotAExpectedType(expectedType, () => ErrorAmbiguousReferenceType(context, Parser));
-        
+
         if (expectedType is not null)
         {
             if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeRef)
@@ -301,7 +423,8 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         var expectedType = _expectedTypes.Peek();
         if (expectedType is not null)
         {
-            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeList)
+            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeList &&
+                !_extensions.Contains("#type-reconstruction") && expectedType is not UniversalTypeVar)
             {
                 throw new Exception(ErrorUnexpectedList(expectedType, context, Parser));
             }
@@ -311,6 +434,11 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         if (contextExpr.Count == 0)
         {
+            if (_extensions.Contains("#type-reconstruction"))
+            {
+                return new TypeList(new TypeVariable(++_typeVariablesNum));
+            }
+
             return expectedType switch
             {
                 null => _extensions.Contains("#ambiguous-type-as-bottom")
@@ -329,9 +457,18 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         foreach (var expr in exprContexts)
         {
             var exprType = expr.Accept(this);
-            if (!EqualsIType(exprType, firstElementInListType, _extensions))
+
+            if (_extensions.Contains("#type-reconstruction"))
             {
-                ChooseUnexpectedTypeSubtype(_extensions, firstElementInListType, exprType, context, Parser);
+                _constraints.Push(
+                    new Constraint(exprType, firstElementInListType, context));
+            }
+            else
+            {
+                if (!EqualsIType(exprType, firstElementInListType, _extensions))
+                {
+                    ChooseUnexpectedTypeSubtype(_extensions, firstElementInListType, exprType, context, Parser);
+                }
             }
         }
 
@@ -393,9 +530,14 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var listType = VisitContextWithExpectedType(() => context.list.Accept(this), null, _expectedTypes);
 
-        CheckNotAExpectedType(listType as TypeList, () => ErrorNotAList(listType, context, Parser));
+        if (listType is TypeList typeList) return typeList.ListType;
 
-        return (listType as TypeList)!.ListType;
+        if (!_extensions.Contains("#type-reconstruction") || listType is not TypeVariable)
+            throw new Exception(ErrorNotAList(listType, context, Parser));
+
+        var typeVariable = new TypeVariable(++_typeVariablesNum);
+        _constraints.Push(new Constraint(listType, new TypeList(typeVariable), context));
+        return typeVariable;
     }
 
     public IType VisitTerminatingSemicolon(TerminatingSemicolonContext context)
@@ -436,7 +578,8 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         if (expectedType is not null)
         {
-            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeFunction)
+            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeFunction &&
+                !_extensions.Contains("#type-reconstruction") && expectedType is not UniversalTypeVar)
             {
                 throw new Exception(ErrorUnexpectedLambda(expectedType, context, Parser));
             }
@@ -461,16 +604,24 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
             var paramType = VisitContextWithExpectedType(() => paramDecls[index].Accept(this), expectedParamType,
                 _expectedTypes);
 
-            if (expectedParamType is not null && !EqualsIType(expectedParamType, paramType, _extensions, context, Parser))
+            if (expectedParamType is not null && _extensions.Contains("#type-reconstruction"))
             {
-                if (!_extensions.Contains("#structural-subtyping"))
+                _constraints.Push(new Constraint(paramType, expectedParamType, context));
+            }
+            else
+            {
+                if (expectedParamType is not null &&
+                    !EqualsIType(expectedParamType, paramType, _extensions, context, Parser))
                 {
-                    throw new Exception(ErrorUnexpectedTypeForParameter(paramType, expectedParamType,
+                    if (!_extensions.Contains("#structural-subtyping"))
+                    {
+                        throw new Exception(ErrorUnexpectedTypeForParameter(paramType, expectedParamType,
+                            context.returnExpr, Parser));
+                    }
+
+                    throw new Exception(ErrorUnexpectedSubtype(expectedParamType, paramType,
                         context.returnExpr, Parser));
                 }
-
-                throw new Exception(ErrorUnexpectedSubtype(expectedParamType, paramType,
-                    context.returnExpr, Parser));
             }
 
             paramNameTypeDict.Add(paramDeclName, paramType);
@@ -578,17 +729,34 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         var conditionType =
             VisitContextWithExpectedType(() => context.condition.Accept(this), typeBool, _expectedTypes);
 
-        if (!EqualsIType(conditionType, typeBool, _extensions))
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            ChooseUnexpectedTypeSubtype(_extensions, typeBool, conditionType, context.condition, Parser);
+            _constraints.Push(
+                new Constraint(conditionType, typeBool, context));
+        }
+        else
+        {
+            if (!EqualsIType(conditionType, typeBool, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, typeBool, conditionType, context.condition, Parser);
+            }
         }
 
         var thenExprType = context.thenExpr.Accept(this);
         var elseExprType =
             VisitContextWithExpectedType(() => context.elseExpr.Accept(this), thenExprType, _expectedTypes);
-        if (!EqualsIType(elseExprType, thenExprType, _extensions))
+
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            ChooseUnexpectedTypeSubtype(_extensions, thenExprType, elseExprType, context, Parser);
+            _constraints.Push(
+                new Constraint(thenExprType, elseExprType, context));
+        }
+        else
+        {
+            if (!EqualsIType(elseExprType, thenExprType, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, thenExprType, elseExprType, context, Parser);
+            }
         }
 
         return thenExprType;
@@ -598,30 +766,59 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var functionType = VisitContextWithExpectedType(() => context.fun.Accept(this), null, _expectedTypes);
 
-        CheckNotAExpectedType(functionType as TypeFunction, () => ErrorNotAFunction(functionType, context.fun, Parser));
-
-        var function = functionType as TypeFunction;
-        var argumentTypes = function!.ArgumentTypes;
-
-        if (argumentTypes.Count != context._args.Count)
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            throw new Exception(ErrorIncorrectNumberOfArguments(argumentTypes.Count, context._args.Count, context,
-                Parser));
-        }
-
-        for (var index = 0; index < argumentTypes.Count; index++)
-        {
-            var currentArgType = argumentTypes[index];
-            var contextArgsIndex = index;
-            var actualType = VisitContextWithExpectedType(() => context._args[contextArgsIndex].Accept(this),
-                currentArgType, _expectedTypes);
-            if (!EqualsIType(actualType, currentArgType, _extensions, context, Parser))
+            if (functionType is TypeFunction function && function.ArgumentTypes.Count != context._args.Count)
             {
-                ChooseUnexpectedTypeSubtype(_extensions, currentArgType, actualType, context, Parser);
+                throw new Exception(ErrorIncorrectNumberOfArguments(function.ArgumentTypes.Count, context._args.Count,
+                    context,
+                    Parser));
             }
-        }
 
-        return function.ReturnType;
+            var typeVariable = new TypeVariable(++_typeVariablesNum);
+            _constraints.Push(new Constraint(functionType, new TypeFunction(context._args.Select(
+                (exprContextType, index) =>
+                {
+                    return VisitContextWithExpectedType(
+                        () =>
+                        {
+                            var argType = exprContextType.Accept(this);
+                            var typeVar = new TypeVariable(++_typeVariablesNum);
+                            _constraints.Push(new Constraint(typeVar, argType, context));
+                            return typeVar;
+                        }, (functionType as TypeFunction)?.ArgumentTypes.ElementAtOrDefault(index), _expectedTypes);
+                }).ToList(), typeVariable), context));
+
+            return typeVariable;
+        }
+        else
+        {
+            CheckNotAExpectedType(functionType as TypeFunction,
+                () => ErrorNotAFunction(functionType, context.fun, Parser));
+
+            var function = functionType as TypeFunction;
+            var argumentTypes = function!.ArgumentTypes;
+
+            if (argumentTypes.Count != context._args.Count)
+            {
+                throw new Exception(ErrorIncorrectNumberOfArguments(argumentTypes.Count, context._args.Count, context,
+                    Parser));
+            }
+
+            for (var index = 0; index < argumentTypes.Count; index++)
+            {
+                var currentArgType = argumentTypes[index];
+                var contextArgsIndex = index;
+                var actualType = VisitContextWithExpectedType(() => context._args[contextArgsIndex].Accept(this),
+                    currentArgType, _expectedTypes);
+                if (!EqualsIType(actualType, currentArgType, _extensions, context, Parser))
+                {
+                    ChooseUnexpectedTypeSubtype(_extensions, currentArgType, actualType, context, Parser);
+                }
+            }
+
+            return function.ReturnType;
+        }
     }
 
     public IType VisitDeref(DerefContext context)
@@ -644,7 +841,15 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var argumentType = VisitContextWithExpectedType(() => context.list.Accept(this), null, _expectedTypes);
 
-        CheckNotAExpectedType(argumentType as TypeList, () => ErrorNotAList(argumentType, context, Parser));
+        if (_extensions.Contains("#type-reconstruction"))
+        {
+            _constraints.Push(
+                new Constraint(argumentType, new TypeList(new TypeVariable(++_typeVariablesNum)), context));
+        }
+        else
+        {
+            CheckNotAExpectedType(argumentType as TypeList, () => ErrorNotAList(argumentType, context, Parser));
+        }
 
         return new TypeBool();
     }
@@ -673,9 +878,16 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         var typeNat = new TypeNat();
         var argumentType = VisitContextWithExpectedType(() => context.n.Accept(this), typeNat, _expectedTypes);
 
-        if (!EqualsIType(argumentType, typeNat, _extensions))
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            ChooseUnexpectedTypeSubtype(_extensions, typeNat, argumentType, context, Parser);
+            _constraints.Push(new Constraint(argumentType, typeNat, context));
+        }
+        else
+        {
+            if (!EqualsIType(argumentType, typeNat, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, typeNat, argumentType, context, Parser);
+            }
         }
 
         return typeNat;
@@ -684,14 +896,16 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     public IType VisitInl(InlContext context)
     {
         var expectedType = _expectedTypes.Peek();
-        if (expectedType is null && !_extensions.Contains("#ambiguous-type-as-bottom"))
+        if (expectedType is null && !_extensions.Contains("#ambiguous-type-as-bottom") &&
+            !_extensions.Contains("#type-reconstruction"))
         {
             throw new Exception(ErrorAmbiguousSumType(context, Parser));
         }
 
         if (expectedType is not null)
         {
-            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeSum)
+            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeSum &&
+                !_extensions.Contains("#type-reconstruction") && expectedType is not UniversalTypeVar)
             {
                 throw new Exception(ErrorUnexpectedInjection(expectedType, context, Parser));
             }
@@ -699,7 +913,9 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         var inlType = VisitContextWithExpectedType(() => context.expr_.Accept(this), (expectedType as TypeSum)?.Inl,
             _expectedTypes);
-        return new TypeSum(inlType, (expectedType as TypeSum)?.Inr ?? new TypeBottom());
+        return new TypeSum(inlType, (expectedType as TypeSum)?.Inr ?? (_extensions.Contains("#ambiguous-type-as-bottom")
+            ? new TypeBottom()
+            : new TypeVariable(++_typeVariablesNum)));
     }
 
     public IType VisitGreaterThanOrEqual(GreaterThanOrEqualContext context)
@@ -711,14 +927,16 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var expectedType = _expectedTypes.Peek();
 
-        if (expectedType is null && !_extensions.Contains("#ambiguous-type-as-bottom"))
+        if (expectedType is null && !_extensions.Contains("#ambiguous-type-as-bottom") &&
+            !_extensions.Contains("#type-reconstruction"))
         {
             throw new Exception(ErrorAmbiguousSumType(context, Parser));
         }
 
         if (expectedType is not null)
         {
-            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeSum)
+            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeSum &&
+                !_extensions.Contains("#type-reconstruction") && expectedType is not UniversalTypeVar)
             {
                 throw new Exception(ErrorUnexpectedInjection(expectedType, context, Parser));
             }
@@ -726,7 +944,10 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         var inrType = VisitContextWithExpectedType(() => context.expr_.Accept(this), (expectedType as TypeSum)?.Inr,
             _expectedTypes);
-        return new TypeSum((expectedType as TypeSum)?.Inl ?? new TypeBottom(), inrType);
+        return new TypeSum(
+            (expectedType as TypeSum)?.Inl ?? (_extensions.Contains("#ambiguous-type-as-bottom")
+                ? new TypeBottom()
+                : new TypeVariable(++_typeVariablesNum)), inrType);
     }
 
     public IType VisitMatch(MatchContext context)
@@ -746,17 +967,27 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         {
             var patternType =
                 VisitContextWithExpectedType(() => curCase.pattern_.Accept(this), exprType, _expectedTypes);
-            if (!EqualsIType(patternType, exprType, _extensions, context, Parser))
+            if (_extensions.Contains("#type-reconstruction"))
             {
-                ChooseUnexpectedTypeSubtype(_extensions, exprType, patternType, context, Parser);
+                _constraints.Push(new Constraint(patternType, exprType, context));
+            }
+            else
+            {
+                if (!EqualsIType(patternType, exprType, _extensions, context, Parser))
+                {
+                    ChooseUnexpectedTypeSubtype(_extensions, exprType, patternType, context, Parser);
+                }
             }
 
             resultType =
                 VisitContextWithExpectedType(() => curCase.expr_.Accept(this), expectedType ?? null, _expectedTypes);
         }
 
+        var constraintsList = _constraints.ToList();
+        constraintsList.Reverse();
+
         var patterns = cases.Select(it => it.pattern_).ToList();
-        if (!CheckExhaustiveMatchPatterns(exprType, patterns))
+        if (!CheckExhaustiveMatchPatterns(exprType, patterns, constraintsList, _extensions))
         {
             throw new Exception(ErrorNonexhaustiveMatchPatterns(exprType, context, Parser));
         }
@@ -778,9 +1009,14 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var listType = VisitContextWithExpectedType(() => context.list.Accept(this), null, _expectedTypes);
 
-        CheckNotAExpectedType(listType as TypeList, () => ErrorNotAList(listType, context, Parser));
+        if (listType is TypeList) return listType;
 
-        return listType;
+        if (!_extensions.Contains("#type-reconstruction") || listType is not TypeVariable)
+            throw new Exception(ErrorNotAList(listType, context, Parser));
+
+        var typeVariable = new TypeVariable(++_typeVariablesNum);
+        _constraints.Push(new Constraint(listType, new TypeList(typeVariable), context));
+        return typeVariable;
     }
 
     public IType VisitRecord(RecordContext context)
@@ -789,7 +1025,8 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         if (expectedType is not null)
         {
-            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeRecord)
+            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeRecord &&
+                expectedType is not UniversalTypeVar)
             {
                 throw new Exception(ErrorUnexpectedRecord(expectedType, context, Parser));
             }
@@ -876,7 +1113,26 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
     public IType VisitTypeApplication(TypeApplicationContext context)
     {
-        throw new NotImplementedException();
+        var funType = context.fun.Accept(this);
+        if (funType is not UniversalType universalType)
+        {
+            throw new Exception(ErrorNotAGenericFunction(context, Parser));
+        }
+
+        if (context._types.Count != universalType.Variables.Count)
+        {
+            throw new Exception(ErrorIncorrectNumberOfTypeArguments(context._types.Count, universalType.Variables.Count,
+                context, Parser));
+        }
+
+        var variables = context._types.Select(type => type.Accept(this)).ToList();
+        var typesDictionary = universalType.Variables.Select((typeVar, index) =>
+        {
+            var variableByIndex = variables[index];
+            return (typeVar, variableByIndex);
+        }).ToDictionary(pair => pair.typeVar, pair => pair.variableByIndex);
+
+        return ReplaceType(universalType, typesDictionary);
     }
 
     public IType VisitLetRec(LetRecContext context)
@@ -892,14 +1148,26 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         foreach (var patternBinding in context._patternBindings)
         {
             var patternType = VisitContextWithExpectedType(() => patternBinding.pat.Accept(this), null, _expectedTypes);
-            var curExprType = VisitContextWithExpectedType(() => patternBinding.expr().Accept(this), patternType, _expectedTypes);
+            var curExprType =
+                VisitContextWithExpectedType(() => patternBinding.expr().Accept(this), patternType, _expectedTypes);
 
-            if (!EqualsIType(curExprType, patternType, _extensions))
+            if (_extensions.Contains("#type-reconstruction"))
             {
-                throw new Exception(ErrorUnexpectedPatternForType(curExprType, patternBinding.pat, Parser));
+                _constraints.Push(new Constraint(curExprType, patternType, context));
+            }
+            else
+            {
+                if (!EqualsIType(curExprType, patternType, _extensions))
+                {
+                    throw new Exception(ErrorUnexpectedPatternForType(curExprType, patternBinding.pat, Parser));
+                }
             }
 
-            if (!CheckExhaustiveMatchPatterns(patternType, context._patternBindings.Select(x => x.pat).ToList()))
+            var constraintsList = _constraints.ToList();
+            constraintsList.Reverse();
+
+            if (!CheckExhaustiveMatchPatterns(patternType, context._patternBindings.Select(x => x.pat).ToList(),
+                    constraintsList, _extensions))
             {
                 throw new Exception(ErrorNonexhaustiveLetPatterns(patternType, context, Parser));
             }
@@ -936,9 +1204,16 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         var typeNat = new TypeNat();
         var nType = VisitContextWithExpectedType(() => context.n.Accept(this), typeNat, _expectedTypes);
 
-        if (!EqualsIType(nType, typeNat, _extensions))
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            ChooseUnexpectedTypeSubtype(_extensions, typeNat, nType, context, Parser);
+            _constraints.Push(new Constraint(nType, typeNat, context));
+        }
+        else
+        {
+            if (!EqualsIType(nType, typeNat, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, typeNat, nType, context, Parser);
+            }
         }
 
         return typeNat;
@@ -949,9 +1224,16 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         var expectedType = context.type_.Accept(this);
         var exprType = VisitContextWithExpectedType(() => context.expr_.Accept(this), expectedType, _expectedTypes);
 
-        if (!EqualsIType(exprType, expectedType, _extensions))
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            ChooseUnexpectedTypeSubtype(_extensions, expectedType, exprType, context, Parser);
+            _constraints.Push(new Constraint(exprType, expectedType, context));
+        }
+        else
+        {
+            if (!EqualsIType(exprType, expectedType, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, expectedType, exprType, context, Parser);
+            }
         }
 
         return expectedType;
@@ -962,9 +1244,16 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         var typeNat = new TypeNat();
         var nType = VisitContextWithExpectedType(() => context.n.Accept(this), typeNat, _expectedTypes);
 
-        if (!EqualsIType(nType, typeNat, _extensions))
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            ChooseUnexpectedTypeSubtype(_extensions, typeNat, nType, context, Parser);
+            _constraints.Push(new Constraint(nType, typeNat, context));
+        }
+        else
+        {
+            if (!EqualsIType(nType, typeNat, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, typeNat, nType, context, Parser);
+            }
         }
 
         var initialType = context.initial.Accept(this);
@@ -972,9 +1261,16 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
             new TypeFunction(new List<IType> { initialType }, initialType));
         var stepType = VisitContextWithExpectedType(() => context.step.Accept(this), typeFunction, _expectedTypes);
 
-        if (!EqualsIType(stepType, typeFunction, _extensions))
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            ChooseUnexpectedTypeSubtype(_extensions, typeFunction, stepType, context, Parser);
+            _constraints.Push(new Constraint(stepType, typeFunction, context));
+        }
+        else
+        {
+            if (!EqualsIType(stepType, typeFunction, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, typeFunction, stepType, context, Parser);
+            }
         }
 
         return initialType;
@@ -1007,7 +1303,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
                 ChooseUnexpectedTypeSubtype(_extensions, typeRef.InternalType, internalType, context, Parser);
             }
         }
-        
+
         return expectedType ?? new TypeRef(internalType);
     }
 
@@ -1015,17 +1311,32 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var tupleType = VisitContextWithExpectedType(() => context.expr_.Accept(this), null, _expectedTypes);
 
-        CheckNotAExpectedType(tupleType as TypeTuple, () => ErrorNotATuple(tupleType, context, Parser));
+        if (tupleType is not TypeTuple && !_extensions.Contains("#type-reconstruction"))
+        {
+            throw new Exception(ErrorNotATuple(tupleType, context, Parser));
+        }
 
         var tuple = tupleType as TypeTuple;
         var index = int.Parse(context.index.Text) - 1;
 
-        if (tuple!.TupleTypes.Count <= index)
+        if (tuple is not null && tuple.TupleTypes.Count <= index || tupleType is TypeVariable && index >= 3)
         {
             throw new Exception(ErrorTupleIndexOfBounds(index, context, Parser));
         }
 
-        return tuple.TupleTypes[index];
+        if (tuple is not null)
+        {
+            return tuple.TupleTypes[index];
+        }
+
+        var typeVariable = new TypeVariable(++_typeVariablesNum);
+        _constraints.Push(new Constraint(tupleType, new TypeTuple(
+            index == 1
+                ? new List<IType>() { typeVariable, new TypeVariable(++_typeVariablesNum) }
+                : new List<IType>() { new TypeVariable(++_typeVariablesNum), typeVariable }
+        ), context));
+
+        return typeVariable;
     }
 
     public IType VisitFix(FixContext context)
@@ -1037,18 +1348,33 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         var exprType = VisitContextWithExpectedType(() => context.expr_.Accept(this), exprExpectedType, _expectedTypes);
 
-        CheckNotAExpectedType(exprType as TypeFunction, () => ErrorNotAFunction(exprType, context.expr_, Parser));
-
-        if ((exprType as TypeFunction)!.ArgumentTypes.Count != 1)
+        if (!_extensions.Contains("#type-reconstruction") &&
+            (exprType is not TypeFunction function || function.ArgumentTypes.Count != 1))
         {
             throw new Exception(ErrorNotAFunction(exprType, context.expr_, Parser));
         }
 
-        var exprTypeFunction = exprType as TypeFunction;
-        var expectedType = new TypeFunction(exprTypeFunction!.ArgumentTypes, exprTypeFunction.ArgumentTypes.First());
-        if (!EqualsIType(exprType, expectedType, _extensions))
+        TypeFunction expectedType;
+        if (exprType is TypeFunction exprTypeFunction)
         {
-            ChooseUnexpectedTypeSubtype(_extensions, expectedType, exprType, context, Parser);
+            expectedType = exprTypeFunction with { ReturnType = exprTypeFunction.ArgumentTypes.First() };
+        }
+        else
+        {
+            var typeVariable = new TypeVariable(++_typeVariablesNum);
+            expectedType = new TypeFunction(new List<IType> { typeVariable }, typeVariable);
+        }
+
+        if (_extensions.Contains("#type-reconstruction"))
+        {
+            _constraints.Push(new Constraint(exprType, expectedType, context));
+        }
+        else
+        {
+            if (!EqualsIType(exprType, expectedType, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, expectedType, exprType, context, Parser);
+            }
         }
 
         return expectedType.ArgumentTypes.First();
@@ -1069,7 +1395,23 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
             var exprType = VisitContextWithExpectedType(() => patternBinding.expr().Accept(this), null, _expectedTypes);
             var patType = VisitContextWithExpectedType(() => patternBinding.pat.Accept(this), exprType, _expectedTypes);
 
-            if (!CheckExhaustiveMatchPatterns(patType, context._patternBindings.Select(x => x.pat).ToList()))
+            if (_extensions.Contains("#type-reconstruction"))
+            {
+                _constraints.Push(new Constraint(exprType, patType, context));
+            }
+            else
+            {
+                if (!EqualsIType(exprType, patType, _extensions))
+                {
+                    throw new Exception(ErrorUnexpectedPatternForType(exprType, patternBinding.pat, Parser));
+                }
+            }
+
+            var constraintsList = _constraints.ToList();
+            constraintsList.Reverse();
+
+            if (!CheckExhaustiveMatchPatterns(patType, context._patternBindings.Select(x => x.pat).ToList(),
+                    constraintsList, _extensions))
             {
                 throw new Exception(ErrorNonexhaustiveLetPatterns(patType, context, Parser));
             }
@@ -1106,7 +1448,8 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         if (expectedType is not null)
         {
-            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeTuple)
+            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeTuple &&
+                !_extensions.Contains("#type-reconstruction") && expectedType is not UniversalTypeVar)
             {
                 throw new Exception(ErrorUnexpectedTuple(expectedType, context, Parser));
             }
@@ -1114,9 +1457,11 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         var tuple = expectedType as TypeTuple;
 
-        if (tuple is not null && tuple.TupleTypes.Count != context._exprs.Count)
+        if (tuple is not null && tuple.TupleTypes.Count != context._exprs.Count ||
+            expectedType is TypeVariable && context._exprs.Count >= 3)
         {
-            throw new Exception(ErrorUnexpectedTupleLength(tuple, context, Parser));
+            var tupleTypesCount = tuple is not null ? tuple.TupleTypes.Count : 2;
+            throw new Exception(ErrorUnexpectedTupleLength(tupleTypesCount, context, Parser));
         }
 
         var tupleTypes = context._exprs.Select((expr, i) =>
@@ -1136,7 +1481,8 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
         if (expectedType is not null)
         {
-            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeList)
+            if (!_extensions.Contains("#structural-subtyping") && expectedType is not TypeList &&
+                !_extensions.Contains("#type-reconstruction") && expectedType is not UniversalTypeVar)
             {
                 throw new Exception(ErrorUnexpectedList(expectedType, context, Parser));
             }
@@ -1148,9 +1494,16 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
         var expectedListType = new TypeList(headType);
         var tailType = VisitContextWithExpectedType(() => context.tail.Accept(this), expectedListType, _expectedTypes);
 
-        if (!EqualsIType(tailType, expectedListType, _extensions))
+        if (_extensions.Contains("#type-reconstruction"))
         {
-            ChooseUnexpectedTypeSubtype(_extensions, expectedListType, tailType, context, Parser);
+            _constraints.Push(new Constraint(tailType, expectedListType, context));
+        }
+        else
+        {
+            if (!EqualsIType(tailType, expectedListType, _extensions))
+            {
+                ChooseUnexpectedTypeSubtype(_extensions, expectedListType, tailType, context, Parser);
+            }
         }
 
         return expectedListType;
@@ -1175,45 +1528,54 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var expectedType = _expectedTypes.Peek();
 
-        CheckNotAExpectedType(expectedType as TypeVariant,
-            () => ErrorUnexpectedPatternForType(expectedType, context, Parser));
-
-        var variant = expectedType as TypeVariant;
-        var label = context.label.Text;
-
-        var duplicateKeys = variant!.Variants.GroupBy(item => item.Item1)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key);
-        var labelNamesCollection = duplicateKeys as string[] ?? duplicateKeys.ToArray();
-        if (labelNamesCollection.Length != 0)
+        if (expectedType is not null && expectedType is not TypeVariant && expectedType is not TypeVariable)
         {
-            throw new Exception(ErrorDuplicateVariantTypeFields(labelNamesCollection, variant, Parser));
+            throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
         }
 
-        var variantsDict = variant.Variants.ToDictionary(item => item.Item1, item => item.Item2);
-
-        if (!variantsDict.ContainsKey(label))
+        if (expectedType is not TypeVariable)
         {
-            throw new Exception(ErrorUnexpectedPatternForType(variant, context, Parser));
+            var variant = expectedType as TypeVariant;
+            var label = context.label.Text;
+
+            var duplicateKeys = variant!.Variants.GroupBy(item => item.Item1)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key);
+            var labelNamesCollection = duplicateKeys as string[] ?? duplicateKeys.ToArray();
+            if (labelNamesCollection.Length != 0)
+            {
+                throw new Exception(ErrorDuplicateVariantTypeFields(labelNamesCollection, variant, Parser));
+            }
+
+            var variantsDict = variant.Variants.ToDictionary(item => item.Item1, item => item.Item2);
+
+            if (!variantsDict.ContainsKey(label))
+            {
+                throw new Exception(ErrorUnexpectedPatternForType(variant, context, Parser));
+            }
+
+            var variantLabelType = variantsDict[label];
+            if (variantLabelType is not null && context.pattern_ is null)
+            {
+                throw new Exception(ErrorUnexpectedNullaryVariantPattern(variant, context, Parser));
+            }
+
+            if (variantLabelType is null && context.pattern_ is not null)
+            {
+                throw new Exception(ErrorUnexpectedNonNullaryVariantPattern(variant, context, Parser));
+            }
+
+            if (variantLabelType is not null)
+            {
+                VisitContextWithExpectedType(() => context.pattern_!.Accept(this), variantLabelType, _expectedTypes);
+            }
+
+            return variant;
         }
 
-        var variantLabelType = variantsDict[label];
-        if (variantLabelType is not null && context.pattern_ is null)
-        {
-            throw new Exception(ErrorUnexpectedNullaryVariantPattern(variant, context, Parser));
-        }
-
-        if (variantLabelType is null && context.pattern_ is not null)
-        {
-            throw new Exception(ErrorUnexpectedNonNullaryVariantPattern(variant, context, Parser));
-        }
-
-        if (variantLabelType is not null)
-        {
-            VisitContextWithExpectedType(() => context.pattern_!.Accept(this), variantLabelType, _expectedTypes);
-        }
-
-        return variant;
+        var typeVariable = new TypeVariable(++_typeVariablesNum);
+        VisitContextWithExpectedType(() => context.pattern_!.Accept(this), typeVariable, _expectedTypes);
+        return typeVariable;
     }
 
     public IType VisitPatternAsc(PatternAscContext context)
@@ -1234,141 +1596,205 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var expectedType = _expectedTypes.Peek();
 
-        CheckNotAExpectedType(expectedType as TypeSum,
-            () => ErrorUnexpectedPatternForType(expectedType!, context, Parser));
+        if (expectedType is not TypeSum && expectedType is not TypeVariable)
+        {
+            throw new Exception(ErrorUnexpectedPatternForType(expectedType!, context, Parser));
+        }
 
-        var typeSum = expectedType as TypeSum;
-        VisitContextWithExpectedType(() => context.pattern_.Accept(this), typeSum!.Inl, _expectedTypes);
+        if (expectedType is TypeSum typeSum)
+        {
+            VisitContextWithExpectedType(() => context.pattern_.Accept(this), typeSum.Inl, _expectedTypes);
+            return typeSum;
+        }
 
-        return typeSum;
+        var typeVariable = new TypeVariable(++_typeVariablesNum);
+        VisitContextWithExpectedType(() => context.pattern_.Accept(this), typeVariable,
+            _expectedTypes);
+        return typeVariable;
     }
 
     public IType VisitPatternInr(PatternInrContext context)
     {
         var expectedType = _expectedTypes.Peek();
 
-        CheckNotAExpectedType(expectedType as TypeSum,
-            () => ErrorUnexpectedPatternForType(expectedType!, context, Parser));
+        if (expectedType is not TypeSum && expectedType is not TypeVariable)
+        {
+            throw new Exception(ErrorUnexpectedPatternForType(expectedType!, context, Parser));
+        }
 
-        var typeSum = expectedType as TypeSum;
-        VisitContextWithExpectedType(() => context.pattern_.Accept(this), typeSum!.Inr, _expectedTypes);
+        if (expectedType is TypeSum typeSum)
+        {
+            VisitContextWithExpectedType(() => context.pattern_.Accept(this), typeSum.Inr, _expectedTypes);
+            return typeSum;
+        }
 
-        return typeSum;
+        var typeVariable = new TypeVariable(++_typeVariablesNum);
+        VisitContextWithExpectedType(() => context.pattern_.Accept(this), typeVariable,
+            _expectedTypes);
+        return typeVariable;
     }
 
     public IType VisitPatternTuple(PatternTupleContext context)
     {
         var expectedType = _expectedTypes.Peek();
-        if (expectedType is not null && expectedType is not TypeTuple)
+        if (expectedType is not null && expectedType is not TypeTuple && expectedType is not TypeVariable)
         {
             throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
         }
 
-        var tuple = expectedType as TypeTuple;
-
-        if (tuple is not null && tuple.TupleTypes.Count != context._patterns.Count)
+        if (expectedType is not TypeVariable)
         {
-            throw new Exception(ErrorUnexpectedPatternForType(tuple, context, Parser));
+            var tuple = expectedType as TypeTuple;
+
+            if (tuple is not null && tuple.TupleTypes.Count != context._patterns.Count)
+            {
+                throw new Exception(ErrorUnexpectedPatternForType(tuple, context, Parser));
+            }
+
+            var tupleTypes = context._patterns.Select((expr, i) =>
+            {
+                var expectedTupleType = tuple?.TupleTypes[i];
+                var currentTupleType =
+                    VisitContextWithExpectedType(() => expr.Accept(this), expectedTupleType, _expectedTypes);
+                return currentTupleType;
+            }).ToList();
+
+            return new TypeTuple(tupleTypes);
         }
 
-        var tupleTypes = context._patterns.Select((expr, i) =>
+        var typeVariable = new TypeVariable(++_typeVariablesNum);
+        var tupleTypesVariable = context._patterns.Select((expr, i) =>
         {
-            var expectedTupleType = tuple?.TupleTypes[i];
             var currentTupleType =
-                VisitContextWithExpectedType(() => expr.Accept(this), expectedTupleType, _expectedTypes);
+                VisitContextWithExpectedType(() => expr.Accept(this), typeVariable, _expectedTypes);
             return currentTupleType;
         }).ToList();
 
-        return new TypeTuple(tupleTypes);
+        return new TypeTuple(tupleTypesVariable);
     }
 
     public IType VisitPatternRecord(PatternRecordContext context)
     {
         var expectedType = _expectedTypes.Peek();
-        if (expectedType is not null && expectedType is not TypeRecord)
+        if (expectedType is not null && expectedType is not TypeRecord && expectedType is not TypeVariable)
         {
             throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
         }
 
-        var record = expectedType as TypeRecord;
-
-        if (context._patterns.Count != record?.Fields.Count())
+        if (expectedType is not TypeVariable)
         {
-            throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
+            var record = expectedType as TypeRecord;
+
+            if (context._patterns.Count != record?.Fields.Count())
+            {
+                throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
+            }
+
+            foreach (var pattern in context._patterns)
+            {
+                var labelName = pattern.label.Text;
+
+                if (!record.Fields.ToDictionary().ContainsKey(labelName))
+                {
+                    throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
+                }
+
+                var expectedFieldType = record.Fields.ToDictionary()[labelName];
+
+                var labelType =
+                    VisitContextWithExpectedType(() => pattern.Accept(this), expectedFieldType, _expectedTypes);
+
+                if (!EqualsIType(labelType, expectedFieldType, _extensions))
+                {
+                    throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
+                }
+            }
+
+            return record;
         }
 
+        var typeVariable = new TypeVariable(++_typeVariablesNum);
         foreach (var pattern in context._patterns)
         {
-            var labelName = pattern.label.Text;
-
-            if (!record.Fields.ToDictionary().ContainsKey(labelName))
-            {
-                throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
-            }
-
-            var expectedFieldType = record.Fields.ToDictionary()[labelName];
-
-            var labelType =
-                VisitContextWithExpectedType(() => pattern.Accept(this), expectedFieldType, _expectedTypes);
-
-            if (!EqualsIType(labelType, expectedFieldType, _extensions))
-            {
-                throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
-            }
+            VisitContextWithExpectedType(() => pattern.Accept(this), typeVariable, _expectedTypes);
         }
 
-        return record;
+        return typeVariable;
     }
 
     public IType VisitPatternList(PatternListContext context)
     {
         var expectedType = _expectedTypes.Peek();
-        if (expectedType is not null && expectedType is not TypeList)
+        if (expectedType is not null && expectedType is not TypeList && expectedType is not TypeVariable)
         {
             throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
         }
 
-        var expectedListType = (expectedType as TypeList)!.ListType;
-
-        foreach (var pattern in context._patterns)
+        if (expectedType is not TypeVariable)
         {
-            var curListType =
-                VisitContextWithExpectedType(() => pattern.Accept(this), expectedListType, _expectedTypes);
-            if (!EqualsIType(expectedListType, curListType, _extensions))
+            var expectedListType = (expectedType as TypeList)!.ListType;
+
+            foreach (var pattern in context._patterns)
             {
-                throw new Exception(ErrorUnexpectedPatternForType(curListType, context, Parser));
+                var curListType =
+                    VisitContextWithExpectedType(() => pattern.Accept(this), expectedListType, _expectedTypes);
+                if (!EqualsIType(expectedListType, curListType, _extensions))
+                {
+                    throw new Exception(ErrorUnexpectedPatternForType(curListType, context, Parser));
+                }
             }
+
+            return new TypeList(expectedListType);
         }
 
-        return new TypeList(expectedListType);
+        var typeVariable = new TypeVariable(++_typeVariablesNum);
+        foreach (var pattern in context._patterns)
+        {
+            VisitContextWithExpectedType(() => pattern.Accept(this), typeVariable, _expectedTypes);
+        }
+
+        return typeVariable;
     }
 
     public IType VisitPatternCons(PatternConsContext context)
     {
         var expectedType = _expectedTypes.Peek();
-        if (expectedType is not null && expectedType is not TypeList)
+        if (expectedType is not null && expectedType is not TypeList && expectedType is not TypeVariable)
         {
             throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
         }
 
-        var list = expectedType as TypeList;
-
-        var headType = VisitContextWithExpectedType(() => context.head.Accept(this), list?.ListType, _expectedTypes);
-        var expectedListType = new TypeList(headType);
-        var tailType = VisitContextWithExpectedType(() => context.tail.Accept(this), expectedListType, _expectedTypes);
-
-        if (!EqualsIType(expectedListType, tailType, _extensions))
+        if (expectedType is not TypeVariable)
         {
-            throw new Exception(ErrorUnexpectedPatternForType(tailType, context, Parser));
+            var list = expectedType as TypeList;
+
+            var headType =
+                VisitContextWithExpectedType(() => context.head.Accept(this), list?.ListType, _expectedTypes);
+            var expectedListType = new TypeList(headType);
+            var tailType =
+                VisitContextWithExpectedType(() => context.tail.Accept(this), expectedListType, _expectedTypes);
+
+            if (!EqualsIType(expectedListType, tailType, _extensions))
+            {
+                throw new Exception(ErrorUnexpectedPatternForType(tailType, context, Parser));
+            }
+
+            return expectedListType;
         }
 
-        return expectedListType;
+        var typeVariable = new TypeVariable(++_typeVariablesNum);
+        var headTypeVariable =
+            VisitContextWithExpectedType(() => context.head.Accept(this), typeVariable, _expectedTypes);
+        var expectedListTypeVariable = new TypeList(headTypeVariable);
+        VisitContextWithExpectedType(() => context.tail.Accept(this), expectedListTypeVariable, _expectedTypes);
+
+        return expectedListTypeVariable;
     }
 
     public IType VisitPatternFalse(PatternFalseContext context)
     {
         var expectedType = _expectedTypes.Peek();
-        if (expectedType is not null && expectedType is not TypeBool)
+        if (expectedType is not null && expectedType is not TypeBool && expectedType is not TypeVariable)
         {
             throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
         }
@@ -1379,7 +1805,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     public IType VisitPatternTrue(PatternTrueContext context)
     {
         var expectedType = _expectedTypes.Peek();
-        if (expectedType is not null && expectedType is not TypeBool)
+        if (expectedType is not null && expectedType is not TypeBool && expectedType is not TypeVariable)
         {
             throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
         }
@@ -1390,7 +1816,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     public IType VisitPatternUnit(PatternUnitContext context)
     {
         var expectedType = _expectedTypes.Peek();
-        if (expectedType is not null && expectedType is not TypeUnit)
+        if (expectedType is not null && expectedType is not TypeUnit && expectedType is not TypeVariable)
         {
             throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
         }
@@ -1414,7 +1840,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     public IType VisitPatternInt(PatternIntContext context)
     {
         var expectedType = _expectedTypes.Peek();
-        if (expectedType is not null && expectedType is not TypeNat)
+        if (expectedType is not null && expectedType is not TypeNat && expectedType is not TypeVariable)
         {
             throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
         }
@@ -1426,11 +1852,13 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
     {
         var expectedType = _expectedTypes.Peek()!;
 
-        CheckNotAExpectedType(expectedType as TypeNat,
-            () => ErrorUnexpectedPatternForType(expectedType, context, Parser));
+        if (expectedType is not TypeNat && expectedType is not TypeVariable)
+        {
+            throw new Exception(ErrorUnexpectedPatternForType(expectedType, context, Parser));
+        }
 
         var argumentType =
-            VisitContextWithExpectedType(() => context.pattern_.Accept(this), expectedType, _expectedTypes);
+            VisitContextWithExpectedType(() => context.pattern_.Accept(this), expectedType as TypeNat, _expectedTypes);
 
         return argumentType;
     }
@@ -1488,7 +1916,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
     public IType VisitTypeAuto(TypeAutoContext context)
     {
-        throw new NotImplementedException();
+        return new TypeVariable(++_typeVariablesNum);
     }
 
     public IType VisitTypeSum(TypeSumContext context)
@@ -1498,7 +1926,13 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
     public IType VisitTypeVar(TypeVarContext context)
     {
-        throw new NotImplementedException();
+        var generic = TryGetGeneric(context.name.Text, _generics);
+        if (generic is null)
+        {
+            throw new Exception(ErrorUndefinedTypeVariable(context.name.Text, Parser));
+        }
+
+        return generic;
     }
 
     public IType VisitTypeVariant(TypeVariantContext context)
@@ -1509,7 +1943,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
                 var variantLabel = field.label.Text;
                 var variantType = field.stellatype()?.Accept(this);
                 return (variantLabel, variantType);
-            });
+            }).ToList();
 
         return new TypeVariant(variants);
     }
@@ -1542,7 +1976,9 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
 
     public IType VisitTypeForAll(TypeForAllContext context)
     {
-        throw new NotImplementedException();
+        var variables = context._types.Select(type => new UniversalTypeVar(type.Text)).ToList();
+        var nestedType = VisitContextWithGenerics(() => context.stellatype().Accept(this), variables, _generics);
+        return new UniversalType(variables, nestedType);
     }
 
     public IType VisitTypeRecord(TypeRecordContext context)
@@ -1553,7 +1989,7 @@ public record TypeChecker(stellaParser Parser) : IstellaParserVisitor<IType>
                 var fieldLabel = field.label.Text;
                 var fieldType = field.stellatype().Accept(this);
                 return (fieldLabel, fieldType);
-            });
+            }).ToList();
 
         return new TypeRecord(fields);
     }

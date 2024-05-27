@@ -316,14 +316,13 @@ public static class ErrorsOutput
         return sb.ToString();
     }
 
-    public static string ErrorUnexpectedTupleLength(IType expectedTuple, ExprContext expression, stellaParser parser)
+    public static string ErrorUnexpectedTupleLength(int expectedTupleCount, ExprContext expression, stellaParser parser)
     {
         var sb = new StringBuilder();
         sb.AppendLine("ERROR_UNEXPECTED_TUPLE_LENGTH:");
         sb.AppendLine("ожидается Tuple");
-        sb.AppendLine($"{expectedTuple}");
         sb.AppendLine("длина которого");
-        sb.AppendLine($"{(expectedTuple as TypeTuple)!.TupleTypes.Count}");
+        sb.AppendLine($"{expectedTupleCount}");
         sb.AppendLine("для выражения");
         sb.AppendLine($"{expression.ToStringTree(parser)}");
 
@@ -601,7 +600,7 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
-    
+
     public static string ErrorUnexpectedReference(RuleContext ruleContext, stellaParser parser)
     {
         var sb = new StringBuilder();
@@ -612,7 +611,7 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
-    
+
     public static string ErrorNonexhaustiveLetPatterns(IType expectedType, RuleContext expression,
         stellaParser parser)
     {
@@ -625,7 +624,7 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
-    
+
     public static string ErrorMissingTypeForLabel(IType expectedType, RuleContext expression,
         stellaParser parser)
     {
@@ -637,7 +636,7 @@ public static class ErrorsOutput
 
         return sb.ToString();
     }
-    
+
     public static string ErrorUnexpectedTypeForNullaryLabel(IType expectedType, RuleContext expression,
         stellaParser parser)
     {
@@ -648,6 +647,60 @@ public static class ErrorsOutput
         sb.AppendLine("ожидается тип");
         sb.AppendLine($"{expectedType}");
         sb.AppendLine("но его нет");
+
+        return sb.ToString();
+    }
+
+    public static string ErrorOccursCheckInfiniteType(IType expectedType, IType? actualType, ExprContext expression,
+        stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_OCCURS_CHECK_INFINITE_TYPE:");
+        sb.AppendLine("во время унификации");
+        sb.AppendLine($"{expectedType}");
+        sb.AppendLine("и");
+        sb.AppendLine($"{actualType}");
+        sb.AppendLine("для выражения");
+        sb.AppendLine($"{expression.ToStringTree(parser)}");
+        sb.AppendLine("возникает ограничение,");
+        sb.AppendLine("порождающее (запрещенный) бесконечный тип");
+
+        return sb.ToString();
+    }
+
+    public static string ErrorNotAGenericFunction(ExprContext expression, stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_NOT_A_GENERIC_FUNCTION:");
+        sb.AppendLine("при попытке применить универсальное выражение");
+        sb.AppendLine("к типовому аргументу,");
+        sb.AppendLine("выражение оказывается не универсальной функцией");
+        sb.AppendLine($"{expression.ToStringTree(parser)}");
+
+        return sb.ToString();
+    }
+
+    public static string ErrorIncorrectNumberOfTypeArguments(int expectedType, int actualType,
+        ExprContext expression, stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_INCORRECT_NUMBER_OF_TYPE_ARGUMENTS:");
+        sb.AppendLine("вызов универсальной функции");
+        sb.AppendLine($"{expression.ToStringTree(parser)}");
+        sb.AppendLine("происходит с некорректным количеством типов-аргументов");
+        sb.AppendLine($"{actualType}");
+        sb.AppendLine("когда требуется");
+        sb.AppendLine($"{expectedType}");
+
+        return sb.ToString();
+    }
+
+    public static string ErrorUndefinedTypeVariable(string variableName, stellaParser parser)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ERROR_UNDEFINED_TYPE_VARIABLE:");
+        sb.AppendLine("в типе содержится необъявленная типовая переменная");
+        sb.AppendLine($"{variableName}");
 
         return sb.ToString();
     }

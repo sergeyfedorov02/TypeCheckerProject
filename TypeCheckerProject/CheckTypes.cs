@@ -9,6 +9,28 @@ public static class CheckTypes
     public static bool EqualsIType(IType first, IType second, HashSet<string> extensions, ExprContext? context = null,
         stellaParser? parser = null)
     {
+        if (first is UniversalTypeVar firstUniversalVar && second is UniversalTypeVar secondUniversalVar)
+        {
+            return firstUniversalVar.Name == secondUniversalVar.Name;
+        }
+
+        if (first is UniversalType firstUniversal && second is UniversalType secondUniversal)
+        {
+            if (firstUniversal.Variables.Count != secondUniversal.Variables.Count)
+            {
+                return false;
+            }
+
+            var typesDictionary = firstUniversal.Variables.Select((typeVar, index) =>
+            {
+                var value = secondUniversal.Variables[index];
+                return (typeVar, value);
+            }).ToDictionary(pair => pair.typeVar, pair => pair.value as IType);
+            var replaceType = ReplaceType(firstUniversal, typesDictionary);
+
+            return EqualsIType(replaceType, secondUniversal.NestedType, extensions, context, parser);
+        }
+
         if (first.ToString() is not null && first.ToString()!.Equals(second.ToString()))
         {
             return true;
@@ -94,7 +116,7 @@ public static class CheckTypes
     {
         if (firstTypeTuple.TupleTypes.Count != secondTypeTuple.TupleTypes.Count)
         {
-            throw new Exception(ErrorUnexpectedTupleLength(firstTypeTuple, context!, parser!));
+            throw new Exception(ErrorUnexpectedTupleLength(firstTypeTuple.TupleTypes.Count, context!, parser!));
         }
 
         return firstTypeTuple.TupleTypes
@@ -159,5 +181,53 @@ public static class CheckTypes
     {
         return EqualsIType(firstTypeRef.InternalType, secondTypeRef.InternalType, extensions, context, parser) &&
                EqualsIType(secondTypeRef.InternalType, firstTypeRef.InternalType, extensions, context, parser);
+    }
+
+    public static IType ReplaceType(IType curType, Dictionary<UniversalTypeVar, IType> typesDictionary)
+    {
+        if (curType is UniversalType universalType)
+        {
+            var replacedType = ReplaceType(universalType.NestedType, typesDictionary);
+            return !typesDictionary.Keys.All(it => universalType.Variables.Contains(it))
+                ? universalType with { NestedType = replacedType }
+                : replacedType;
+        }
+
+        return curType switch
+        {
+            TypeFunction typeFunction => new TypeFunction(
+                typeFunction.ArgumentTypes.Select(argType => ReplaceType(argType, typesDictionary)).ToList(),
+                ReplaceType(typeFunction.ReturnType, typesDictionary)),
+
+            TypeTuple typeTuple => new TypeTuple(typeTuple.TupleTypes.Select(type => ReplaceType(type, typesDictionary))
+                .ToList()),
+
+            TypeRecord typeRecord => new TypeRecord(typeRecord.Fields
+                .Select(field =>
+                {
+                    var fieldLabel = field.Item1;
+                    var fieldType = ReplaceType(field.Item2, typesDictionary);
+                    return (fieldLabel, fieldType);
+                }).ToList()),
+
+            TypeSum typeSum => new TypeSum(ReplaceType(typeSum.Inl, typesDictionary),
+                ReplaceType(typeSum.Inr, typesDictionary)),
+
+            TypeList typeList => new TypeList(ReplaceType(typeList.ListType, typesDictionary)),
+
+            TypeVariant typeVariant => new TypeVariant(typeVariant.Variants.Select(variant =>
+            {
+                var variantLabel = variant.Item1;
+                var variantType = ReplaceType(variant.Item2, typesDictionary);
+                return (variantLabel, variantType);
+            }).ToList()),
+
+            UniversalTypeVar universalTypeVar =>
+                typesDictionary.TryGetValue(universalTypeVar, out var substitutedType)
+                    ? substitutedType
+                    : universalTypeVar,
+
+            _ => curType
+        };
     }
 }

@@ -91,7 +91,7 @@ public static class StandardTypes
                 $"&{InternalType}";
         }
     }
-    
+
     public record TypeTop : IType
     {
         public override string ToString()
@@ -99,7 +99,7 @@ public static class StandardTypes
             return "Top";
         }
     }
-    
+
     public record TypeBottom : IType
     {
         public override string ToString()
@@ -107,7 +107,31 @@ public static class StandardTypes
             return "Bottom";
         }
     }
-    
+
+    public record TypeVariable(int Num) : IType
+    {
+        public override string ToString()
+        {
+            return $"?T{Num}";
+        }
+    }
+
+    public record UniversalTypeVar(string Name) : IType
+    {
+        public override string ToString()
+        {
+            return $"{Name}";
+        }
+    }
+
+    public record UniversalType(List<UniversalTypeVar> Variables, IType NestedType) : IType
+    {
+        public override string ToString()
+        {
+            return "forall " + string.Join(". ", Variables) + ". " + NestedType;
+        }
+    }
+
     public static IEnumerable<(string, IType)> ExceptRecords(IEnumerable<(string, IType)> values,
         IEnumerable<(string, IType)> expectedValues, HashSet<string> extensions)
     {
